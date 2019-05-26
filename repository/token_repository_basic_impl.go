@@ -32,16 +32,6 @@ func (r *TokenRepositoryBasic) init() {
 	r.blackListedTokens = make(map[string]struct{})
 }
 
-func (r *TokenRepositoryBasic) getNewRefreshToken(accessToken *oauth2.AccessToken) (refreshToken *oauth2.AccessToken) {
-	refreshToken = oauth2.NewRefreshToken(accessToken)
-	_, used := r.usedTokens[string(refreshToken.GetToken())]
-	if !used {
-		return refreshToken
-	} else {
-		return r.getNewRefreshToken(accessToken)
-	}
-}
-
 func (r *TokenRepositoryBasic) deleteAccessToken(tokenHint *oauth2.AccessTokenHint) {
 	r.blackListedTokens[string(tokenHint.Token)] = struct{}{}
 	delete(r.accessTokens, string(tokenHint.Token))
