@@ -1,0 +1,40 @@
+server:
+  hostname: localhost
+  port: 8443
+  certificate: ./cert.pem
+  privateKey: ./key.pem
+logger:
+  level:  debug
+  #json or console
+  encoding: console
+  outputPaths:
+  - stdout
+  - ./log
+  errorOutputPaths:
+  - stderr
+  encoderConfig:
+    timeKey: time
+    timeEncoder: iso8601
+    callerKey: caller
+    callerEncoder: short
+    messageKey: message
+    levelKey: level
+    levelEncoder: capital
+users:
+  implementation: leveldb
+  admin:
+    username: admin
+    password: admin
+    repository: main
+clients:
+  implementation: leveldb
+groups:
+  implementation: leveldb
+resources:
+  implementation: leveldb
+sessions:
+  implementation: leveldb
+tokens:
+  implementation: leveldb
+  accessDuration: 1h
+  refreshDuration: 1h

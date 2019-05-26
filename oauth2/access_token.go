@@ -178,12 +178,10 @@ type AccessTokenErrorResponse struct {
 	State            string `json:State`
 }
 
-func NewAccessToken(opt *AccessTokenOptions) (accessToken *AccessToken, refreshToken *AccessToken) {
+func NewAccessToken(opt *AccessTokenOptions, accessDuration time.Duration, refreshDuration time.Duration) (accessToken *AccessToken, refreshToken *AccessToken) {
 	createTime := time.Now()
-	expireTimeAccess := createTime.Add(time.Minute * 60) //todo config an expiration time from properties
-
-	accToken := tokens.GetToken() //todo AccessToken generator
-
+	expireTimeAccess := createTime.Add(accessDuration)
+	accToken := tokens.GetToken()
 	accessToken = &AccessToken{
 		AccessToken:    accToken,
 		ClientID:       opt.ClientID,
@@ -198,18 +196,16 @@ func NewAccessToken(opt *AccessTokenOptions) (accessToken *AccessToken, refreshT
 		TokenAuthType:  NewTokenAuthType("Bearer"),
 		TokenHintType:  NewTokenHintType("access_token"),
 	}
-
 	if opt.AddRefreshToken {
-		refreshToken = NewRefreshToken(accessToken)
+		refreshToken = NewRefreshToken(accessToken, refreshDuration)
 		accessToken.RefreshToken = refreshToken.RefreshToken
 	}
-
 	return
 }
 
-func NewRefreshToken(accessToken *AccessToken) (refreshToken *AccessToken) {
+func NewRefreshToken(accessToken *AccessToken, duration time.Duration) (refreshToken *AccessToken) {
 	createTime := time.Now()
-	expireTimeRefresh := accessToken.ExpirationTime.Add(time.Hour * 24) // todo config an expiration time from properties
+	expireTimeRefresh := accessToken.ExpirationTime.Add(duration)
 	token := tokens.GetToken()
 	refreshToken = &AccessToken{
 		AccessToken:    accessToken.AccessToken,
