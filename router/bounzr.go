@@ -11,12 +11,10 @@ import (
 
 //newBounzrRouter returns a new router with Bounzr basic endpoints
 func newBounzrRouter(router *mux.Router) {
-	router.HandleFunc("/", middlewareChain(indexPageGetHandler, sessionCookieSecurity)).Methods("GET")
-	router.HandleFunc("/login", loginPageGetHandler).Methods("GET")
-	router.HandleFunc("/login", loginPagePostHandler).Methods("POST")
-	router.HandleFunc("/logout", logoutPageGetHandler).Methods("GET")
-	router.HandleFunc("/register", registerPageGetHandler).Methods("GET")
-	router.HandleFunc("/register", registerPagePostHandler).Methods("POST")
+	router.HandleFunc("/", middlewareChain(indexPageGetHandler, sessionCookieSecurity)).Methods(http.MethodGet)
+	router.HandleFunc("/login", loginPageHandler).Methods(http.MethodGet, http.MethodPost)
+	router.HandleFunc("/logout", logoutPageGetHandler).Methods(http.MethodGet)
+	router.HandleFunc("/register", registerPageHandler).Methods(http.MethodGet, http.MethodPost)
 }
 
 func indexPageGetHandler(w http.ResponseWriter, r *http.Request) {
@@ -24,6 +22,15 @@ func indexPageGetHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Error("can not render index.html", zap.Error(err))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func loginPageHandler(w http.ResponseWriter, r *http.Request){
+	if r.Method == http.MethodGet{
+		loginPageGetHandler(w,r)
+	}
+	if r.Method == http.MethodPost{
+		loginPagePostHandler(w,r)
 	}
 }
 
@@ -78,6 +85,15 @@ func logoutPageGetHandler(w http.ResponseWriter, r *http.Request) {
 	delete(session.Values, UserSessionToken)
 	session.Save(r, w)
 	landLoginRequest(w, r)
+}
+
+func registerPageHandler(w http.ResponseWriter, r *http.Request){
+	if r.Method == http.MethodGet{
+		registerPageGetHandler(w,r)
+	}
+	if r.Method == http.MethodPost{
+		registerPagePostHandler(w,r)
+	}
 }
 
 func registerPageGetHandler(w http.ResponseWriter, r *http.Request) {

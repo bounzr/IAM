@@ -5,38 +5,27 @@ Client information Response
 ---------------------------
 
 client_id
-REQUIRED. OAuth 2.0 client identifier string. It SHOULD NOT be
-currently valid for any other registered client, though an
-authorization server MAY issue the same client identifier to
-multiple instances of a registered client at its discretion.
+REQUIRED. OAuth 2.0 client identifier string. It SHOULD NOT be currently valid for any other registered client, though an
+authorization server MAY issue the same client identifier to multiple instances of a registered client at its discretion.
 
 client_secret
-OPTIONAL. OAuth 2.0 client secret string. If issued, this MUST
-be unique for each "client_id" and SHOULD be unique for multiple
-instances of a client using the same "client_id". This value is
-used by confidential clients to authenticate to the token
+OPTIONAL. OAuth 2.0 client secret string. If issued, this MUST be unique for each "client_id" and SHOULD be unique for multiple
+instances of a client using the same "client_id". This value is used by confidential clients to authenticate to the token
 endpoint, as described in OAuth 2.0 [RFC6749], Section 2.3.1.
 
 client_id_issued_at
-OPTIONAL. Time at which the client identifier was issued. The
-time is represented as the number of seconds from
-1970-01-01T00:00:00Z as measured in UTC until the date/time of
-issuance.
+OPTIONAL. Time at which the client identifier was issued. The time is represented as the number of seconds from
+1970-01-01T00:00:00Z as measured in UTC until the date/time of issuance.
 
 client_secret_expires_at
-REQUIRED if "client_secret" is issued. Time at which the client
-secret will expire or 0 if it will not expire. The time is
-represented as the number of seconds from 1970-01-01T00:00:00Z as
-measured in UTC until the date/time of expiration.
+REQUIRED if "client_secret" is issued. Time at which the client secret will expire or 0 if it will not expire. The time is
+represented as the number of seconds from 1970-01-01T00:00:00Z as measured in UTC until the date/time of expiration.
 
-Additionally, the authorization server MUST return all registered
-metadata about this client, including any fields provisioned by the
-authorization server itself. The authorization server MAY reject or
-replace any of the client’s requested metadata values submitted
+Additionally, the authorization server MUST return all registered metadata about this client, including any fields provisioned by the
+authorization server itself. The authorization server MAY reject or replace any of the client’s requested metadata values submitted
 during the registration and substitute them with suitable values.
 
-The following is a non-normative example response of a successful
-registration:
+The following is a non-normative example response of a successful registration:
 HTTP/1.1 201 Created
 Content-Type: application/json
 Cache-Control: no-store
@@ -59,35 +48,27 @@ Pragma: no-cache
 "example_extension_parameter": "example_value"
 }
 */
-
+//authorization server MUST return all registered metadata about this client
 type ClientInformationResponse struct {
-	ClientId string `json:"client_id"`
-	//todo client_secret is currently always returning "2PHC()~REute/egh"
-	ClientSecret          string `json:"client_secret,omitempty"`
-	ClientIdIssuedAt      int64  `json:"client_id_issued_at,omitempty"`
-	ClientSecretExpiresAt int64  `json:"client_secret_expires_at,omitempty"`
-
-	//authorization server MUST return all registered metadata about this client
-	RedirectUris *[]string `json:"redirect_uris"`
-	//todo string enum
-	TokenEndpointAuthMethod string `json:"token_endpoint_auth_method"`
-	//todo array string enum
-	//todo can this string slices be returned as pointers instead of objects?
-	GrantTypes []string `json:"grant_types"`
-	//todo array string enum
-	ResponseTypes []string `json:"response_types"`
-	ClientName    string   `json:"client_name,omitempty"`
-	ClientUri     string   `json:"client_uri,omitempty"`
-	LogoUri       string   `json:"logo_uri,omitempty"`
-	Scope         string   `json:"Scope,omitempty"`
-	Contacts      []string `json:"contacts,omitempty"`
-	TosUri        string   `json:"tos_uri,omitempty"`
-	PolicyUri     string   `json:"policy_uri,omitempty"`
-	JwksUri       string   `json:"jwks_uri,omitempty"`
-	//todo jwks object
-	Jwks            string `json:"jwks,omitempty"`
-	SoftwareId      string `json:"software_id,omitempty"`
-	SoftwareVersion string `json:"software_version,omitempty"`
+	ClientId                string   `json:"client_id"`
+	ClientSecret            string   `json:"client_secret,omitempty"`
+	ClientIdIssuedAt        int64    `json:"client_id_issued_at,omitempty"`
+	ClientSecretExpiresAt   int64    `json:"client_secret_expires_at,omitempty"`
+	RedirectUris            []string `json:"redirect_uris"`
+	TokenEndpointAuthMethod string   `json:"token_endpoint_auth_method"` //todo string enum?
+	GrantTypes              []string `json:"grant_types"`                //todo array string enum?
+	ResponseTypes           []string `json:"response_types"`             //todo array string enum
+	ClientName              string   `json:"client_name,omitempty"`
+	ClientUri               string   `json:"client_uri,omitempty"`
+	LogoUri                 string   `json:"logo_uri,omitempty"`
+	Scope                   string   `json:"Scope,omitempty"`
+	Contacts                []string `json:"contacts,omitempty"`
+	TosUri                  string   `json:"tos_uri,omitempty"`
+	PolicyUri               string   `json:"policy_uri,omitempty"`
+	JwksUri                 string   `json:"jwks_uri,omitempty"`
+	Jwks                    string   `json:"jwks,omitempty"` //todo jwks object
+	SoftwareId              string   `json:"software_id,omitempty"`
+	SoftwareVersion         string   `json:"software_version,omitempty"`
 }
 
 /*

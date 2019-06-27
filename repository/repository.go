@@ -3,22 +3,27 @@ package repository
 import (
 	"../config"
 	"../logger"
+	"encoding/gob"
+	"github.com/gofrs/uuid"
 	"go.uber.org/zap"
 )
 
 var (
-	log					*zap.Logger
-	clientManager		ClientRepository
-	groupManager		GroupRepository
-	resourceManager 	resourceRepository
-	sessionManager  	SessionRepository
-	tokenManager    	TokenRepository
-	userRepositories 	map[string]UserRepository
+	log             *zap.Logger
+	clientManager   ClientManager
+	groupManager    GroupManager
+	resourceManager ResourceManager
+	sessionManager  SessionManager
+	tokenManager    TokenManager
 )
 
-//init repositories manager
+//init repositories Manager
 func Init() {
 	log = logger.GetLogger()
+	gob.Register(&SessionToken{})
+	gob.Register(&ConsentToken{})
+	gob.Register(&ResourceTag{})
+
 	initClients()
 	initUsers()
 	initTokens()
@@ -26,82 +31,41 @@ func Init() {
 	initResources()
 	initGroups()
 
-	_, err := GetUser(config.IAM.Users.Admin.Username);
-	if  err != nil {
-		log.Error("get user", zap.Error(err))
-		err = AddTechnicalUser(config.IAM.Users.Admin.Repository, config.IAM.Users.Admin.Username, config.IAM.Users.Admin.Password)
-	}
+	adminGroupFilter := make(map[string]interface{})
+	adminGroupFilter["name"] = "admin"
+	groups, err := groupManager.findGroups(adminGroupFilter)
 	if err != nil {
-		log.Error("add technical user", zap.Error(err))
+		log.Error("can not get groups", zap.Error(err))
 	}
-}
-
-func initClients() {
-	implementation := config.IAM.Clients.Implementation
-	switch implementation {
-	case "leveldb":
-		clientManager = NewClientRepositoryLeveldb()
-	default:
-		clientManager = NewClientRepositoryBasic()
+	var adminGroupID uuid.UUID
+	if len(groups) == 0 {
+		adminGroupID, err = AddGroup("admin")
+		if err != nil {
+			log.Error("can not get admin group", zap.Error(err))
+			panic("admin group is required to run")
+		}
+	} else {
+		adminGroupID = groups[0].Metadata.ID
 	}
-}
-
-func initGroups(){
-	implementation := config.IAM.Groups.Implementation
-	switch implementation {
-	case "leveldb":
-		groupManager = NewGroupRepositoryLeveldb()
-	default:
-		groupManager = NewGroupRepositoryBasic()
+	adminGroup, err := GetGroup(adminGroupID)
+	if err != nil {
+		log.Error("can not get admin group", zap.Error(err))
+		panic("admin group is required to run")
 	}
-}
-
-func initResources() {
-	implementation := config.IAM.Resources.Implementation
-	switch implementation {
-	case "leveldb":
-		resourceManager = NewResourceRepositoryLeveldb()
-	default:
-		resourceManager = NewResourceRepositoryBasic()
+	if len(adminGroup.Members) == 0 {
+		var adminUser *User
+		adminUser, err = GetUser(config.IAM.Users.Admin.Username)
+		if err != nil {
+			log.Debug("no admin user found, new one will be created", zap.Error(err))
+			err = AddTechnicalUser(config.IAM.Users.Admin.Repository, config.IAM.Users.Admin.Username, config.IAM.Users.Admin.Password)
+			if err != nil {
+				log.Error("can not add admin user", zap.String("username", config.IAM.Users.Admin.Username), zap.Error(err))
+			}
+			adminUser, err = GetUser(config.IAM.Users.Admin.Username)
+			if err != nil {
+				log.Error("no admin user found", zap.String("username", config.IAM.Users.Admin.Username), zap.Error(err))
+			}
+		}
+		AddGroupResource(adminGroupID, adminUser.Metadata)
 	}
-}
-
-func initSessions() {
-	implementation := config.IAM.Sessions.Implementation
-	switch implementation {
-	case "leveldb":
-		sessionManager = NewSessionRepositoryLeveldb()
-	default:
-		sessionManager = NewSessionRepository()
-	}
-}
-
-func initTokens() {
-	implementation := config.IAM.Tokens.Implementation
-	switch implementation {
-	case "leveldb":
-		tokenManager = NewTokenRepositoryLeveldb()
-	default:
-		tokenManager = NewTokenRepositoryBasic()
-	}
-}
-
-func initUsers() {
-	userRepositories = make(map[string]UserRepository)
-
-	//TODO different user repos management
-	//todo implementation
-	name := "main"
-	userRepo := NewUserRepository(name)
-	addUserRepository(userRepo, name)
-}
-
-func addUserRepository(ur UserRepository, id string) error {
-	//verify that repository already exists
-	if _, ok := userRepositories[id]; ok {
-		log.Error("add user repository", zap.Error(ErrRepositoryNotAvailable))
-		return ErrRepositoryNotAvailable
-	}
-	userRepositories[id] = ur
-	return nil
 }

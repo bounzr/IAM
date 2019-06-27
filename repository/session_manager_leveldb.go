@@ -1,39 +1,40 @@
 package repository
 
 import (
-
-	"github.com/syndtr/goleveldb/leveldb"
 	"bytes"
 	"encoding/gob"
+	"github.com/syndtr/goleveldb/leveldb"
 	"go.uber.org/zap"
 )
 
-type SessionRepositoryLeveldb struct {
-	sessionDB *leveldb.DB
+type SessionManagerLeveldb struct {
+	sessions     *leveldb.DB
+	sessionsPath string
 }
 
-func NewSessionRepositoryLeveldb() SessionRepository {
-	rep := &SessionRepositoryLeveldb{}
-	rep.init()
-	return rep
-}
-
-func (r *SessionRepositoryLeveldb) init() {
+func (r *SessionManagerLeveldb) init() {
 	var err error
-	r.sessionDB, err = leveldb.OpenFile("./rep/session_user", nil)
+	if len(r.sessionsPath) == 0 {
+		r.sessionsPath = "./rep/session"
+	}
+	r.sessions, err = leveldb.OpenFile(r.sessionsPath, nil)
 	if err != nil {
 		log.Error("can not init session repository", zap.Error(err))
 	}
 }
 
-func (r *SessionRepositoryLeveldb) addSessionContext(token SessionToken, user *UserCtx) {
+func (r *SessionManagerLeveldb) close() {
+	defer r.sessions.Close()
+}
+
+func (r *SessionManagerLeveldb) setSessionContext(token SessionToken, user *UserCtx) {
 	var data bytes.Buffer
 	enc := gob.NewEncoder(&data)
 	err := enc.Encode(user)
 	if err != nil {
 		log.Error("can not encode user context", zap.String("user id", user.UserID.String()), zap.Error(err))
 	}
-	err = r.sessionDB.Put(token[:], data.Bytes(), nil)
+	err = r.sessions.Put(token[:], data.Bytes(), nil)
 	if err != nil {
 		log.Error("can not update session context", zap.String("user id", user.UserID.String()), zap.Error(err))
 	} else {
@@ -41,8 +42,8 @@ func (r *SessionRepositoryLeveldb) addSessionContext(token SessionToken, user *U
 	}
 }
 
-func (r *SessionRepositoryLeveldb) deleteSessionContext(token SessionToken) error {
-	err := r.sessionDB.Delete(token[:], nil)
+func (r *SessionManagerLeveldb) deleteSessionContext(token SessionToken) error {
+	err := r.sessions.Delete(token[:], nil)
 	if err != nil {
 		log.Error("can not delete session context", zap.Error(err))
 		return err
@@ -52,8 +53,8 @@ func (r *SessionRepositoryLeveldb) deleteSessionContext(token SessionToken) erro
 	return nil
 }
 
-func (r *SessionRepositoryLeveldb) getSessionContext(token SessionToken) (*UserCtx, error) {
-	dataBytes, err := r.sessionDB.Get(token[:], nil)
+func (r *SessionManagerLeveldb) getSessionContext(token SessionToken) (*UserCtx, error) {
+	dataBytes, err := r.sessions.Get(token[:], nil)
 	if err != nil {
 		log.Error("can not get session context", zap.Error(err))
 		return nil, err

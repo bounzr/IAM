@@ -6,7 +6,7 @@ import (
 	"./pages"
 	"./repository"
 	packageRouter "./router"
-	"./tokens"
+	"./token"
 	"./utils"
 	"github.com/gorilla/mux"
 
@@ -27,7 +27,7 @@ func main() {
 	config.Init("./config.yml")
 	repository.Init()
 	packageRouter.Init()
-	tokens.Init()
+	token.Init()
 	pages.LoadPages("html/*.html")
 
 	log := logger.GetLogger()
@@ -40,7 +40,7 @@ func main() {
 		tpl, _ := route.GetPathTemplate()
 		met, err := route.GetMethods()
 		if err == nil {
-			log.Info(host + tpl,
+			log.Info(host+tpl,
 				zap.Strings("verbs", met),
 			)
 		}
@@ -50,8 +50,8 @@ func main() {
 		log.Error("router.Walk", zap.Error(err))
 	}
 	srv := &http.Server{
-		Handler: router,
-		Addr:    host,
+		Handler:      router,
+		Addr:         host,
 		WriteTimeout: 15 * time.Second,
 		ReadTimeout:  15 * time.Second,
 	}

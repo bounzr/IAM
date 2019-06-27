@@ -2,14 +2,12 @@ package router
 
 import (
 	"../logger"
-	"../repository"
-	"encoding/gob"
-	"net/http"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/schema"
 	"github.com/gorilla/securecookie"
 	"github.com/gorilla/sessions"
 	"go.uber.org/zap"
+	"net/http"
 )
 
 const (
@@ -30,9 +28,6 @@ var (
 
 func Init() {
 	log = logger.GetLogger()
-	gob.Register(&repository.SessionToken{})
-	gob.Register(&repository.ConsentToken{})
-	gob.Register(&repository.Metadata{})
 }
 
 func NewRouter() *mux.Router {

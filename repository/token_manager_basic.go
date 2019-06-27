@@ -2,11 +2,11 @@ package repository
 
 import (
 	"../oauth2"
-	"time"
 	"go.uber.org/zap"
+	"time"
 )
 
-type TokenRepositoryBasic struct {
+type TokenManagerBasic struct {
 	//string is the authorization code
 	authorizationCodes map[string]*oauth2.AuthorizationCode
 
@@ -17,14 +17,8 @@ type TokenRepositoryBasic struct {
 	blackListedTokens map[string]struct{}
 }
 
-func NewTokenRepositoryBasic() TokenRepository {
-	mtr := &TokenRepositoryBasic{}
-	mtr.init()
-	return mtr
-}
-
 //init the repository
-func (r *TokenRepositoryBasic) init() {
+func (r *TokenManagerBasic) init() {
 	r.authorizationCodes = make(map[string]*oauth2.AuthorizationCode)
 	r.accessTokens = make(map[string]*oauth2.AccessToken)
 	r.refreshTokens = make(map[string]*oauth2.AccessToken)
@@ -32,18 +26,22 @@ func (r *TokenRepositoryBasic) init() {
 	r.blackListedTokens = make(map[string]struct{})
 }
 
-func (r *TokenRepositoryBasic) deleteAccessToken(tokenHint *oauth2.AccessTokenHint) {
+func (r *TokenManagerBasic) close() {
+	//nothing
+}
+
+func (r *TokenManagerBasic) deleteAccessToken(tokenHint *oauth2.AccessTokenHint) {
 	r.blackListedTokens[string(tokenHint.Token)] = struct{}{}
 	delete(r.accessTokens, string(tokenHint.Token))
 	delete(r.refreshTokens, string(tokenHint.Token))
 }
 
-func (r *TokenRepositoryBasic) setAuthorizationCode(code *oauth2.AuthorizationCode) error {
+func (r *TokenManagerBasic) setAuthorizationCode(code *oauth2.AuthorizationCode) error {
 	r.authorizationCodes[code.Code] = code
 	return nil
 }
 
-func (r *TokenRepositoryBasic) setAccessToken(accessToken *oauth2.AccessToken) error {
+func (r *TokenManagerBasic) setAccessToken(accessToken *oauth2.AccessToken) error {
 	if accessToken.TokenHintType == oauth2.AccessTokenHintType {
 		at := string(accessToken.GetToken())
 		r.accessTokens[at] = accessToken
@@ -55,7 +53,7 @@ func (r *TokenRepositoryBasic) setAccessToken(accessToken *oauth2.AccessToken) e
 	return nil
 }
 
-func (r *TokenRepositoryBasic) validateAccessToken(hint *oauth2.AccessTokenHint) (*oauth2.AccessToken, bool) {
+func (r *TokenManagerBasic) validateAccessToken(hint *oauth2.AccessTokenHint) (*oauth2.AccessToken, bool) {
 	var token *oauth2.AccessToken
 	var ok = false
 	if oauth2.NewTokenHintType(hint.Hint) != oauth2.RefreshTokenHintType {
@@ -84,17 +82,17 @@ func (r *TokenRepositoryBasic) validateAccessToken(hint *oauth2.AccessTokenHint)
 	return nil, false
 }
 
-func (r *TokenRepositoryBasic) validateAuthorizationCode(request *oauth2.AuthorizationCodeAccessTokenRequest) (authCode *oauth2.AuthorizationCode, ok bool) {
+func (r *TokenManagerBasic) validateAuthorizationCode(request *oauth2.AuthorizationCodeAccessTokenRequest) (authCode *oauth2.AuthorizationCode, ok bool) {
 	code := request.Code
 	authCode, ok = r.authorizationCodes[code]
 	delete(r.authorizationCodes, code)
 	if !ok {
-		log.Debug("authorization code not found", zap.String("client id", request.ClientID))
+		log.Debug("authorization code not found", zap.String("client ID", request.ClientID))
 		return nil, false
 	}
 	ok = authCode.ValidateAccessTokenRequest(request)
 	if !ok {
-		log.Debug("access token request invalid", zap.String("client id", request.ClientID))
+		log.Debug("access token request invalid", zap.String("client ID", request.ClientID))
 		return nil, false
 	}
 	return authCode, ok

@@ -190,14 +190,14 @@ func (cli *Client) GetOwnerID() uuid.UUID {
 	return cli.OwnerID
 }
 
-func (cli *Client) GetRedirectUris() *[]string {
+func (cli *Client) GetRedirectUris() []string {
 	rus := make([]string, len(cli.RedirectUris))
 	i := 0
 	for k := range cli.RedirectUris {
 		rus[i] = k
 		i++
 	}
-	return &rus
+	return rus
 }
 
 //GetResponseTypes returns slice of registered response types
@@ -246,7 +246,7 @@ func (cli *Client) ValidateClientSecret(secret string) (ok bool) {
 
 /**
 String containing a space-separated list of Scope values (as described in Section 3.3 of OAuth 2.0 [RFC6749]) that the
-client can use when requesting access tokens. The semantics of values in this list are service specific. If omitted, an
+client can use when requesting access token. The semantics of values in this list are service specific. If omitted, an
 authorization server MAY register a client with a default set of scopes.
 **/
 

@@ -104,7 +104,7 @@ encoding of UTF-8 in the HTTP request entity-body:
 		Scope not originally granted by the resource owner, and if omitted is treated as equal to the Scope originally
 		granted by the resource owner.
 
-Because refresh tokens are typically long-lasting credentials used to request additional access tokens, the refresh token
+Because refresh token are typically long-lasting credentials used to request additional access token, the refresh token
 is bound to the client to which it was issued.  If the client type is confidential or the client was issued client credentials
 (or assigned other authentication requirements), the client MUST authenticate with the authorization server as described
 in Section 3.2.1.

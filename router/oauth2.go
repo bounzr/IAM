@@ -17,16 +17,25 @@ import (
 
 //newOauth2Router returns router with Oauth2 related routes
 func newOauth2Router(router *mux.Router) {
-	router.HandleFunc("/authorize", middlewareChain(oauth2AuthorizeGetHandler, sessionCookieSecurity)).Methods("GET")
-	router.HandleFunc("/authorize", middlewareChain(oauth2AuthorizePostHandler, sessionCookieSecurity)).Methods("POST")
+	router.HandleFunc("/authorize", middlewareChain(oauth2AuthorizeHandler, sessionCookieSecurity)).Methods(http.MethodGet, http.MethodPost)
 	router.HandleFunc("/introspect", middlewareChain(oauth2IntrospectPostHandler, basicClientAuthSecurity)).Methods("POST")
 	//TODO according to rfc anonymous registration is allowed, token may be allowed.
 	router.HandleFunc("/register", middlewareChain(oauth2RegisterPostHandler, basicUserAuthSecurity)).Methods("POST")
 	//TODO according to rfc authorization must be token and not basic. Replace basicUserAuthSecurity
 	router.HandleFunc("/register/{id:[-a-zA-Z0-9]+}", middlewareChain(oauth2RegisterGetHandler, basicUserAuthSecurity)).Methods("GET")
-	router.HandleFunc("/register", middlewareChain(clientsGetHandler, basicUserAuthSecurity)).Methods("GET")
 	router.HandleFunc("/revoke", middlewareChain(oauth2RevokePostHandler, basicClientAuthSecurity)).Methods("POST")
 	router.HandleFunc("/token", middlewareChain(oauth2TokenPostHandler, basicClientAuthSecurity)).Methods("POST")
+}
+
+func oauth2AuthorizeHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		oauth2AuthorizeGetHandler(w, r)
+		return
+	}
+	if r.Method == http.MethodPost {
+		oauth2AuthorizePostHandler(w, r)
+		return
+	}
 }
 
 func authorizationRequestErrorRedirect(w http.ResponseWriter, r *http.Request, authorizationRequest *oauth2.AuthorizationRequest, err string) {
@@ -36,22 +45,8 @@ func authorizationRequestErrorRedirect(w http.ResponseWriter, r *http.Request, a
 	if len(state) > 0 {
 		errRedirectURI = fmt.Sprintf("%s?error=%s&state=%s", redirectURI, err, state)
 	}
-	log.Debug("redirecting authorize error to uri ", zap.String("error",err), zap.String("uri", redirectURI))
+	log.Debug("redirecting authorize error to uri ", zap.String("error", err), zap.String("uri", redirectURI))
 	http.Redirect(w, r, errRedirectURI, http.StatusFound)
-}
-
-//this function is not standard oauth. Custom call for bounzr to see the list of clients
-func clientsGetHandler(w http.ResponseWriter, r *http.Request) {
-	cliSum := repository.GetClients()
-	csJSON, err := json.Marshal(cliSum)
-	if err != nil {
-		log.Error("can not marshal client summary json", zap.Error(err))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write(csJSON)
 }
 
 /**
@@ -186,27 +181,27 @@ func oauth2AuthorizePostHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	authReq, err := repository.GetAuthorizationRequest(usrCtx, ct)
 	if err != nil {
-		log.Error("can not get authorization request", zap.String("user id",usrCtx.UserID.String()), zap.String("username",usrCtx.UserName), zap.Error(err))
+		log.Error("can not get authorization request", zap.String("user id", usrCtx.UserID.String()), zap.String("username", usrCtx.UserName), zap.Error(err))
 		//TODO on session error must be handled better. Return to login
 		http.Error(w, err.Error(), http.StatusForbidden)
 		return
 	}
 	err = r.ParseForm()
 	if err != nil {
-		log.Error("can not parse authorization form data", zap.String("user id",usrCtx.UserID.String()), zap.String("username",usrCtx.UserName), zap.Error(err))
+		log.Error("can not parse authorization form data", zap.String("user id", usrCtx.UserID.String()), zap.String("username", usrCtx.UserName), zap.Error(err))
 		//TODO on session error must be handled better than a 500
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if deny := r.FormValue("deny"); len(deny) > 0 {
 		//TODO redirect error message
-		log.Debug("authorization form denied", zap.String("user id",usrCtx.UserID.String()), zap.String("username",usrCtx.UserName))
+		log.Debug("authorization form denied", zap.String("user id", usrCtx.UserID.String()), zap.String("username", usrCtx.UserName))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if approve := r.FormValue("approve"); len(approve) == 0 {
 		//TODO redirect error message
-		log.Error("authorization form denied", zap.String("user id",usrCtx.UserID.String()), zap.String("username",usrCtx.UserName))
+		log.Error("authorization form denied", zap.String("user id", usrCtx.UserID.String()), zap.String("username", usrCtx.UserName))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -223,7 +218,7 @@ func oauth2AuthorizePostHandler(w http.ResponseWriter, r *http.Request) {
 	if strings.Compare(authReq.ResponseType, "code") == 0 {
 		authResponse, err := repository.RequestOauth2AuthorizationCode(usrCtx, authReq)
 		if err != nil {
-			log.Error("can not get authorization request", zap.String("user id",usrCtx.UserID.String()), zap.String("username",usrCtx.UserName), zap.Error(err))
+			log.Error("can not get authorization request", zap.String("user id", usrCtx.UserID.String()), zap.String("username", usrCtx.UserName), zap.Error(err))
 			//TODO on session error must be handled better than a 500
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -268,7 +263,7 @@ func oauth2AuthorizePostHandler(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, clientURL, http.StatusFound)
 		return
 	}
-	log.Error("request could not be handled by any grant", zap.String("user id",usrCtx.UserID.String()), zap.String("username",usrCtx.UserName), zap.Error(err))
+	log.Error("request could not be handled by any grant", zap.String("user id", usrCtx.UserID.String()), zap.String("username", usrCtx.UserName), zap.Error(err))
 	//TODO on session error must be handled better than a 500
 	http.Error(w, err.Error(), http.StatusInternalServerError)
 	return
@@ -334,7 +329,7 @@ func oauth2RegisterGetHandler(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("{\"request\":\"not valid\"}"))
 		return
 	}
-	owner := client.GetOwnerID()
+	owner := client.OwnerID
 
 	//TODO clean context() after it was used leaving no trace
 	var userCtx *repository.UserCtx
@@ -388,16 +383,14 @@ func oauth2RegisterPostHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//todo process client registration
-	client, err := oauth2.NewOauth2Client(clientReq)
+	//client, err := oauth2.NewOauth2Client(clientReq)
+	client, err := repository.NewClient(clientReq)
 	if err != nil {
-		log.Error("can not create new oauth2 client", zap.String("client name", clientReq.ClientName), zap.Error(err))
+		log.Error("can not create new client", zap.String("client name", clientReq.ClientName), zap.Error(err))
+		//todo client.GetClientRegistrationError
 	}
 
 	var clientInfResp *oauth2.ClientInformationResponse
-	//todo
-	//if err != nil{
-	//	client.GetClientRegistrationError
-	//}else{
 
 	//TODO clean context() after it was used leaving no trace
 	//TODO use better func fromContextGetUser(ctx context.Context) (*repository.User, bool)
@@ -405,11 +398,11 @@ func oauth2RegisterPostHandler(w http.ResponseWriter, r *http.Request) {
 		//todo add or handle anonymous scope to user and client
 		profile := loggedUser.(*repository.UserCtx)
 		log.Debug("found logged user context", zap.String("user id", profile.GetUserID().String()))
-		client.SetOwner(profile.GetUserID())
+		client.OwnerID = profile.UserID
 	}
 	repository.AddClient(client)
 	clientInfResp, err = client.GetClientInformationResponse()
-	if err != nil{
+	if err != nil {
 		log.Error("can not get client information response", zap.String("client id", client.ID.String()), zap.Error(err))
 	}
 

@@ -4,7 +4,7 @@ import (
 	"github.com/gofrs/uuid"
 )
 
-type Resource interface {
+type ResourceTagger interface {
 	GetName() string
 	SetName(name string)
 	GetResourceType() string

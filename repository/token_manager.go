@@ -6,17 +6,28 @@ import (
 	"github.com/gofrs/uuid"
 	"strings"
 
-
 	"go.uber.org/zap"
 )
 
-type TokenRepository interface {
+type TokenManager interface {
 	deleteAccessToken(tokenHint *oauth2.AccessTokenHint)
 	init()
+	close()
 	setAccessToken(accessToken *oauth2.AccessToken) error
 	setAuthorizationCode(code *oauth2.AuthorizationCode) error
 	validateAccessToken(tokenHint *oauth2.AccessTokenHint) (token *oauth2.AccessToken, ok bool)
 	validateAuthorizationCode(request *oauth2.AuthorizationCodeAccessTokenRequest) (code *oauth2.AuthorizationCode, ok bool)
+}
+
+func initTokens() {
+	implementation := config.IAM.Tokens.Implementation
+	switch implementation {
+	case "leveldb":
+		tokenManager = &TokenManagerLeveldb{tokensPath: "./rep/token", codesPath: "./rep/code"}
+	default:
+		tokenManager = &TokenManagerBasic{}
+	}
+	tokenManager.init()
 }
 
 func getAccessToken(opt *oauth2.AccessTokenOptions) (token *oauth2.AccessToken) {
@@ -37,79 +48,79 @@ func getAccessToken(opt *oauth2.AccessTokenOptions) (token *oauth2.AccessToken) 
 	return accessToken
 }
 
-func validateClientAllowsCodeRequest(cli *oauth2.Client, request *oauth2.AuthorizationCodeAccessTokenRequest) (ok bool) {
+func validateClientAllowsCodeRequest(cli *Client, request *oauth2.AuthorizationCodeAccessTokenRequest) (ok bool) {
 	ok = true
-	if strings.Compare(cli.GetClientID().String(), request.ClientID) != 0 {
-		log.Debug("client id does not match", zap.String("client id", cli.GetClientID().String()), zap.String("requested", request.ClientID))
+	if strings.Compare(cli.ID.String(), request.ClientID) != 0 {
+		log.Debug("client ID does not match", zap.String("client ID", cli.ID.String()), zap.String("requested", request.ClientID))
 		ok = false
 		return
 	}
-	if !cli.HasGrantType(request.GetGrantType()) {
-		log.Debug("grant type not found for client", zap.String("client id", cli.GetClientID().String()), zap.String("requested", request.GetGrantType().String()))
+	if !cli.HasGrantType(request.GrantType) {
+		log.Debug("grant type not found for client", zap.String("client ID", cli.ID.String()), zap.String("requested", request.GetGrantType().String()))
 		ok = false
 		return
 	}
 	token, _ := oauth2.NewResponseType("token")
-	if !cli.HasResponseType(token) {
-		log.Debug("response type not found for client", zap.String("client id", cli.GetClientID().String()), zap.String("requested", token.String()))
+	if !cli.HasResponseType(token.String()) {
+		log.Debug("response type not found for client", zap.String("client ID", cli.ID.String()), zap.String("requested", token.String()))
 		ok = false
 		return
 	}
-	if !cli.HasRedirectUri(request.RedirectURI) {
-		log.Debug("redirect_uri not found for client", zap.String("client id", cli.GetClientID().String()), zap.String("requested", request.RedirectURI))
+	if !cli.HasRedirectURI(request.RedirectURI) {
+		log.Debug("redirect_uri not found for client", zap.String("client ID", cli.ID.String()), zap.String("requested", request.RedirectURI))
 		ok = false
 		return
 	}
 	return
 }
 
-func validateClientAllowsImplicitRequest(cli *oauth2.Client, request *oauth2.AuthorizationRequest) (ok bool) {
+func validateClientAllowsImplicitRequest(cli *Client, request *oauth2.AuthorizationRequest) (ok bool) {
 	ok = true
-	if !cli.HasGrantType(oauth2.ImplicitGrantType) {
-		log.Debug("grant type not found for client", zap.String("client id", cli.GetClientID().String()), zap.String("requested", oauth2.ImplicitGrantType.String()))
+	if !cli.HasGrantType(oauth2.ImplicitGrantType.String()) {
+		log.Debug("grant type not found for client", zap.String("client ID", cli.ID.String()), zap.String("requested", oauth2.ImplicitGrantType.String()))
 		ok = false
 		return
 	}
 	token, _ := oauth2.NewResponseType("token")
-	if !cli.HasResponseType(token) {
-		log.Debug("response type not found for client", zap.String("client id", cli.GetClientID().String()), zap.String("requested", token.String()))
+	if !cli.HasResponseType(token.String()) {
+		log.Debug("response type not found for client", zap.String("client ID", cli.ID.String()), zap.String("requested", token.String()))
 		ok = false
 		return
 	}
-	if !cli.HasRedirectUri(request.RedirectURI) {
-		log.Debug("redirect_uri not found for client", zap.String("client id", cli.GetClientID().String()), zap.String("requested", request.RedirectURI))
+	if !cli.HasRedirectURI(request.RedirectURI) {
+		log.Debug("redirect_uri not found for client", zap.String("client ID", cli.ID.String()), zap.String("requested", request.RedirectURI))
 		ok = false
 		return
 	}
 	return
 }
 
-func validateClientAllowsPasswordRequest(cli *oauth2.Client, request *oauth2.OwnerPasswordAccessTokenRequest) (ok bool) {
+func validateClientAllowsPasswordRequest(cli *Client, request *oauth2.OwnerPasswordAccessTokenRequest) (ok bool) {
 	ok = true
-	if !cli.HasGrantType(request.GetGrantType()) {
-		log.Debug("grant type not found for client", zap.String("client id", cli.GetClientID().String()), zap.String("requested", request.GetGrantType().String()))
+	if !cli.HasGrantType(request.GrantType) {
+		log.Debug("grant type not found for client", zap.String("client ID", cli.ID.String()), zap.String("requested", request.GetGrantType().String()))
 		ok = false
 		return
 	}
 	token, _ := oauth2.NewResponseType("token")
-	if !cli.HasResponseType(token) {
-		log.Debug("response type not found for client", zap.String("client id", cli.GetClientID().String()), zap.String("requested", token.String()))
+	if !cli.HasResponseType(token.String()) {
+		log.Debug("response type not found for client", zap.String("client ID", cli.ID.String()), zap.String("requested", token.String()))
 		ok = false
 		return
 	}
 	return
 }
 
-func validateClientAllowsRefreshRequest(cli *oauth2.Client, request *oauth2.RefreshAccessTokenRequest) (ok bool) {
+func validateClientAllowsRefreshRequest(cli *Client, request *oauth2.RefreshAccessTokenRequest) (ok bool) {
 	ok = true
-	if !cli.HasGrantType(request.GetGrantType()) {
-		log.Debug("grant type not found for client", zap.String("client id", cli.GetClientID().String()), zap.String("requested", request.GetGrantType().String()))
+	if !cli.HasGrantType(request.GrantType) {
+		log.Debug("grant type not found for client", zap.String("client ID", cli.ID.String()), zap.String("requested", request.GetGrantType().String()))
 		ok = false
 		return
 	}
 	token, _ := oauth2.NewResponseType("token")
-	if !cli.HasResponseType(token) {
-		log.Debug("response type not found for client: %s", zap.String("client id", cli.GetClientID().String()), zap.String("requested", token.String()))
+	if !cli.HasResponseType(token.String()) {
+		log.Debug("response type not found for client: %s", zap.String("client ID", cli.ID.String()), zap.String("requested", token.String()))
 		ok = false
 		return
 	}
@@ -119,17 +130,17 @@ func validateClientAllowsRefreshRequest(cli *oauth2.Client, request *oauth2.Refr
 func AuthorizationCodeGrantOptions(cliCtx *oauth2.ClientCtx, request *oauth2.AuthorizationCodeAccessTokenRequest) *oauth2.AccessTokenOptions {
 	client, found := GetClient(cliCtx.GetClientID())
 	if !found {
-		log.Error("request not valid", zap.String("client id", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrInvalidRequestInfo))
+		log.Error("request not valid", zap.String("client ID", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrInvalidRequestInfo))
 		return nil
 	}
 	//validate that logged in client matches the access token request attributes
 	if !validateClientAllowsCodeRequest(client, request) {
-		log.Error("client did not accept the code request", zap.String("client id", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrInvalidRequestInfo))
+		log.Error("client did not accept the code request", zap.String("client ID", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrInvalidRequestInfo))
 		return nil
 	}
 	authCode, ok := tokenManager.validateAuthorizationCode(request)
 	if !ok {
-		log.Error("invalid authorization code", zap.String("client id", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrInvalidRequestInfo))
+		log.Error("invalid authorization code", zap.String("client ID", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrInvalidRequestInfo))
 		return nil
 	}
 	options := &oauth2.AccessTokenOptions{
@@ -160,17 +171,17 @@ func IntrospectOauth2AccessToken(hint *oauth2.AccessTokenHint) (response *oauth2
 func ImplicitGrantOptions(userCtx *UserCtx, request *oauth2.AuthorizationRequest) *oauth2.AccessTokenOptions {
 	client, found := GetClient(uuid.FromStringOrNil(request.ClientID))
 	if !found {
-		log.Error("request not valid", zap.String("client id", request.ClientID), zap.Error(oauth2.ErrInvalidRequestInfo))
+		log.Error("request not valid", zap.String("client ID", request.ClientID), zap.Error(oauth2.ErrInvalidRequestInfo))
 		return nil
 	}
 	//validate that logged in client matches the access token request attributes
 	if !validateClientAllowsImplicitRequest(client, request) {
-		log.Error("client did not accept the request", zap.String("client id", request.ClientID), zap.Error(oauth2.ErrInvalidRequestInfo))
+		log.Error("client did not accept the request", zap.String("client ID", request.ClientID), zap.Error(oauth2.ErrInvalidRequestInfo))
 		return nil
 	}
 	validScope := client.ValidateScope(request.Scope)
 	options := &oauth2.AccessTokenOptions{
-		ClientID:        client.GetClientID(),
+		ClientID:        client.ID,
 		AddRefreshToken: false,
 		Scope:           []byte(validScope),
 		OwnerID:         userCtx.UserID,
@@ -182,22 +193,22 @@ func ImplicitGrantOptions(userCtx *UserCtx, request *oauth2.AuthorizationRequest
 func OwnerPasswordGrantOptions(cliCtx *oauth2.ClientCtx, request *oauth2.OwnerPasswordAccessTokenRequest) *oauth2.AccessTokenOptions {
 	client, found := GetClient(cliCtx.GetClientID())
 	if !found {
-		log.Error("request not valid", zap.String("client id", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrInvalidRequestInfo))
+		log.Error("request not valid", zap.String("client ID", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrInvalidRequestInfo))
 		return nil
 	}
 	//validate that logged in client matches the access token request attributes
 	if !validateClientAllowsPasswordRequest(client, request) {
-		log.Error("client did not accept the request", zap.String("client id", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrInvalidRequestInfo))
+		log.Error("client did not accept the request", zap.String("client ID", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrInvalidRequestInfo))
 		return nil
 	}
 	userCtx, err := ValidateUser(request.Username, request.Password)
 	if err != nil {
-		log.Error("invalid user credentials", zap.String("client id", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrAccessDeniedInfo))
+		log.Error("invalid user credentials", zap.String("client ID", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrAccessDeniedInfo))
 		return nil
 	}
 	validScope := client.ValidateScope(request.Scope)
 	options := &oauth2.AccessTokenOptions{
-		ClientID:        client.GetClientID(),
+		ClientID:        client.ID,
 		AddRefreshToken: true,
 		Scope:           []byte(validScope),
 		OwnerID:         userCtx.UserID,
@@ -208,17 +219,17 @@ func OwnerPasswordGrantOptions(cliCtx *oauth2.ClientCtx, request *oauth2.OwnerPa
 func RefreshTokenGrantOptions(cliCtx *oauth2.ClientCtx, request *oauth2.RefreshAccessTokenRequest) *oauth2.AccessTokenOptions {
 	client, found := GetClient(cliCtx.GetClientID())
 	if !found {
-		log.Error("request not valid", zap.String("client id", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrInvalidRequestInfo))
+		log.Error("request not valid", zap.String("client ID", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrInvalidRequestInfo))
 		return nil
 	}
 	//validate that logged in client matches the access token request attributes
 	if !validateClientAllowsRefreshRequest(client, request) {
-		log.Error("client did not accept the request", zap.String("client id", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrInvalidRequestInfo))
+		log.Error("client did not accept the request", zap.String("client ID", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrInvalidRequestInfo))
 		return nil
 	}
 	refreshToken, ok := tokenManager.validateAccessToken(request.GetAccessTokenHint())
 	if !ok {
-		log.Error("invalid refresh token", zap.String("client id", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrAccessDeniedInfo))
+		log.Error("invalid refresh token", zap.String("client ID", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrAccessDeniedInfo))
 		return nil
 	}
 	validScope := client.ValidateScope(request.Scope)
@@ -242,21 +253,10 @@ func RequestOauth2AccessToken(opt *oauth2.AccessTokenOptions) (response *oauth2.
 	if !found {
 		return nil, oauth2.ErrUnauthorizedClient
 	}
-	userResource := &Metadata{}
-	ok := resourceManager.loadResource(opt.OwnerID, userResource)
-	//res, ok := resourceManager.getResource(opt.OwnerID)
+	userResource, ok := GetResourceMetadata(opt.OwnerID)
 	if !ok {
 		return nil, oauth2.ErrUnauthorizedClient
 	}
-	/*
-		if strings.Compare(res.GetResourceType(), "user") != 0{
-			return nil, oauth2.ErrUnauthorizedClient
-		}
-		userResource, ok := res.(*UserMetadata)
-		if !ok{
-			return nil, oauth2.ErrUnauthorizedClient
-		}
-	*/
 	users, err := getUserRepository(userResource.RepositoryName)
 	if err != nil {
 		return nil, err
@@ -267,7 +267,7 @@ func RequestOauth2AccessToken(opt *oauth2.AccessTokenOptions) (response *oauth2.
 	}
 
 	//review if owner previously approved a token for client
-	tokenHint, ok := owner.GetClientAccessToken(client.GetClientID())
+	tokenHint, ok := owner.GetClientAccessToken(client.ID)
 	var token *oauth2.AccessToken
 	if ok {
 		//review if token is valid in the repository
@@ -276,11 +276,11 @@ func RequestOauth2AccessToken(opt *oauth2.AccessTokenOptions) (response *oauth2.
 		if ok {
 			return token.GetAccessTokenResponse(), nil
 		} else {
-			owner.DeleteClientTokens(client.GetClientID())
+			owner.DeleteClientTokens(client.ID)
 		}
 	}
 
-	//generate all tokens from scratch since we couldnt find an old token
+	//generate all token from scratch since we couldnt find an old token
 	token = getAccessToken(opt)
 	err = tokenManager.setAccessToken(token)
 	if err != nil {
@@ -298,8 +298,8 @@ func RequestOauth2AuthorizationCode(context *UserCtx, authorizationRequest *oaut
 	if err != nil {
 		return nil, err
 	}
-	userResource := &Metadata{}
-	ok := resourceManager.loadResource(context.GetUserID(), userResource)
+	//userResource := &ResourceTag{}
+	userResource, ok := GetResourceMetadata(context.GetUserID())
 	if !ok {
 		return nil, oauth2.ErrUnauthorizedClient
 	}
@@ -309,7 +309,7 @@ func RequestOauth2AuthorizationCode(context *UserCtx, authorizationRequest *oaut
 	}
 	code := oauth2.NewAuthorizationCode(user.ID, authorizationRequest)
 	err = tokenManager.setAuthorizationCode(code)
-	if err != nil{
+	if err != nil {
 		return nil, err
 	}
 	return code.GetAuthorizationCodeResponse(), nil
@@ -321,12 +321,12 @@ func ValidateOauth2AuthorizationRequest(authorizationRequest *oauth2.Authorizati
 	//Verification of clientID
 	clientID := uuid.FromStringOrNil(authorizationRequest.ClientID)
 	if len(clientID) == 0 {
-		log.Error("client id is empty", zap.Error(oauth2.ErrClientIdentifierInfo))
+		log.Error("client ID is empty", zap.Error(oauth2.ErrClientIdentifierInfo))
 		return oauth2.ErrClientIdentifierInfo
 	}
 	client, found := GetClient(clientID)
 	if !found {
-		log.Error("client id not found", zap.Error(oauth2.ErrClientIdentifierInfo))
+		log.Error("client ID not found", zap.Error(oauth2.ErrClientIdentifierInfo))
 		return oauth2.ErrClientIdentifierInfo
 	}
 
@@ -336,7 +336,7 @@ func ValidateOauth2AuthorizationRequest(authorizationRequest *oauth2.Authorizati
 		log.Error("redirect url is empty", zap.Error(oauth2.ErrRedirectionURIInfo))
 		return oauth2.ErrRedirectionURIInfo
 	}
-	if !client.HasRedirectUri(redirectURI) {
+	if !client.HasRedirectURI(redirectURI) {
 		log.Error("client does not have redirect url", zap.Error(oauth2.ErrRedirectionURIInfo))
 		return oauth2.ErrRedirectionURIInfo
 	}
@@ -345,31 +345,31 @@ func ValidateOauth2AuthorizationRequest(authorizationRequest *oauth2.Authorizati
 	//Verification of response type
 	responseType := authorizationRequest.ResponseType
 	if len(responseType) == 0 {
-		log.Error("response type is empty for client", zap.String("client id", clientID.String()), zap.Error(oauth2.ErrInvalidRequestInfo))
+		log.Error("response type is empty for client", zap.String("client ID", clientID.String()), zap.Error(oauth2.ErrInvalidRequestInfo))
 		return oauth2.ErrInvalidRequestInfo
 	}
 	//compare if the grant is code
 	if strings.Compare(responseType, "code") == 0 {
-		if !(client.HasGrantType(oauth2.AuthorizationCodeGrantType) && client.HasResponseType(oauth2.Code)) {
-			log.Error("authorization code must have response type code", zap.String("client id", clientID.String()), zap.Error(oauth2.ErrUnauthorizedClientInfo))
+		if !(client.HasGrantType(oauth2.AuthorizationCodeGrantType.String()) && client.HasResponseType(oauth2.Code.String())) {
+			log.Error("authorization code must have response type code", zap.String("client ID", clientID.String()), zap.Error(oauth2.ErrUnauthorizedClientInfo))
 			return oauth2.ErrUnauthorizedClientInfo
 		}
 		//compare if the grant is token (implicit)
 	} else if strings.Compare(responseType, "token") == 0 {
-		if !(client.HasGrantType(oauth2.ImplicitGrantType) && client.HasResponseType(oauth2.Token)) {
-			log.Error("Implicit grant type must have response type token", zap.String("client id", clientID.String()), zap.Error(oauth2.ErrUnauthorizedClientInfo))
+		if !(client.HasGrantType(oauth2.ImplicitGrantType.String()) && client.HasResponseType(oauth2.Token.String())) {
+			log.Error("Implicit grant type must have response type token", zap.String("client ID", clientID.String()), zap.Error(oauth2.ErrUnauthorizedClientInfo))
 			return oauth2.ErrUnauthorizedClientInfo
 		}
 		//no grant type or response type
 	} else {
-		log.Error("no grant type nor response type", zap.String("client id", clientID.String()), zap.Error(oauth2.ErrUnauthorizedClientInfo))
+		log.Error("no grant type nor response type", zap.String("client ID", clientID.String()), zap.Error(oauth2.ErrUnauthorizedClientInfo))
 		return oauth2.ErrUnauthorizedClientInfo
 	}
 
 	//3. State warning
 	//Verification of state otherwise warn the console
 	if len(authorizationRequest.State) == 0 {
-		log.Warn("client is not providing a state. RFC6749 recommends the use of a state", zap.String("client id", clientID.String()))
+		log.Warn("client is not providing a state. RFC6749 recommends the use of a state", zap.String("client ID", clientID.String()))
 	}
 
 	//4. Modification of the request

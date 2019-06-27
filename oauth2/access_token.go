@@ -1,7 +1,7 @@
 package oauth2
 
 import (
-	"../tokens"
+	"../token"
 	"github.com/gofrs/uuid"
 	"time"
 )
@@ -23,7 +23,7 @@ expire in one hour from the time the response was generated. If omitted, the aut
 expiration time via other means or document the default value.
 
 refresh_token
-OPTIONAL. The refresh token, which can be used to obtain new access tokens using the same authorization grant
+OPTIONAL. The refresh token, which can be used to obtain new access token using the same authorization grant
 
 Scope
 OPTIONAL, if identical to the Scope requested by the client; otherwise, REQUIRED.
@@ -33,7 +33,7 @@ parameters are serialized into a JavaScript Object Notation (JSON) structure by 
 Parameter names and string values are included as JSON strings.
 Numerical values are included as JSON numbers. The order of parameters does not matter and can vary.
 The authorization server MUST include the HTTP "Cache-Control" response header field [RFC2616] with a value of "no-store" in any
-response containing tokens, credentials, or other sensitive information, as well as the "Pragma" response header field [RFC2616]
+response containing token, credentials, or other sensitive information, as well as the "Pragma" response header field [RFC2616]
 with a value of "no-cache".
 For example:
 HTTP/1.1 200 OK
@@ -181,7 +181,7 @@ type AccessTokenErrorResponse struct {
 func NewAccessToken(opt *AccessTokenOptions, accessDuration time.Duration, refreshDuration time.Duration) (accessToken *AccessToken, refreshToken *AccessToken) {
 	createTime := time.Now()
 	expireTimeAccess := createTime.Add(accessDuration)
-	accToken := tokens.GetToken()
+	accToken := token.GetToken()
 	accessToken = &AccessToken{
 		AccessToken:    accToken,
 		ClientID:       opt.ClientID,
@@ -206,7 +206,7 @@ func NewAccessToken(opt *AccessTokenOptions, accessDuration time.Duration, refre
 func NewRefreshToken(accessToken *AccessToken, duration time.Duration) (refreshToken *AccessToken) {
 	createTime := time.Now()
 	expireTimeRefresh := accessToken.ExpirationTime.Add(duration)
-	token := tokens.GetToken()
+	token := token.GetToken()
 	refreshToken = &AccessToken{
 		AccessToken:    accessToken.AccessToken,
 		ClientID:       accessToken.ClientID,

@@ -8,27 +8,30 @@ import (
 	"strings"
 )
 
-type UserRepositoryLeveldb struct {
-	cfgDB  *leveldb.DB
-	userDB *leveldb.DB
+type UserManagerLeveldb struct {
+	cfgDB    *leveldb.DB
+	cfgPath  string
+	userDB   *leveldb.DB
+	userPath string
 }
 
-func NewUserRepositoryLevelDB() UserRepository {
-	rep := &UserRepositoryLeveldb{}
-	rep.init()
-	return rep
-}
-
-func (r *UserRepositoryLeveldb) init() {
+func (r *UserManagerLeveldb) init() {
+	if len(r.cfgPath) == 0 {
+		r.cfgPath = "./rep/user_cfg"
+	}
 	r.openCfgDB()
-	//defer r.cfgDB.Close()
+	if len(r.userPath) == 0 {
+		r.userPath = "./rep/user"
+	}
 	r.openUserDB()
-	//defer r.userDB.Close()
 }
 
-func (r *UserRepositoryLeveldb) validateUser(username string, password string) error {
-	//r.openUserDB()
-	//defer r.userDB.Close()
+func (r *UserManagerLeveldb) close() {
+	defer r.cfgDB.Close()
+	defer r.userDB.Close()
+}
+
+func (r *UserManagerLeveldb) validateUser(username string, password string) error {
 	user, ok := r.getUser(username)
 	if !ok {
 		return ErrInvalidLogin
@@ -39,9 +42,7 @@ func (r *UserRepositoryLeveldb) validateUser(username string, password string) e
 	return ErrInvalidLogin
 }
 
-func (r *UserRepositoryLeveldb) deleteUser(username string) {
-	//r.openUserDB()
-	//defer r.userDB.Close()
+func (r *UserManagerLeveldb) deleteUser(username string) {
 	err := r.userDB.Delete([]byte(username), nil)
 	if err != nil {
 		log.Error("can not delete user", zap.String("username", username), zap.Error(err))
@@ -50,9 +51,7 @@ func (r *UserRepositoryLeveldb) deleteUser(username string) {
 	}
 }
 
-func (r *UserRepositoryLeveldb) getRepositoryName() string {
-	//r.openCfgDB()
-	//defer r.cfgDB.Close()
+func (r *UserManagerLeveldb) getRepositoryName() string {
 	nameByte, err := r.cfgDB.Get([]byte("name"), nil)
 	if err != nil {
 		log.Error("can not get repository name", zap.Error(err))
@@ -61,9 +60,30 @@ func (r *UserRepositoryLeveldb) getRepositoryName() string {
 	return string(nameByte)
 }
 
-func (r *UserRepositoryLeveldb) getUser(username string) (*User, bool) {
-	//r.openUserDB()
-	//defer r.userDB.Close()
+//todo findUsers(search parameters)
+func (r *UserManagerLeveldb) findUsers() ([]User, error) {
+	var users []User
+	iter := r.userDB.NewIterator(nil, nil)
+	for iter.Next() {
+		dataBytes := iter.Value()
+		data := bytes.NewBuffer(dataBytes)
+		dec := gob.NewDecoder(data)
+		var user User
+		err := dec.Decode(&user)
+		if err != nil {
+			log.Error("can not decode user", zap.ByteString("id", iter.Key()), zap.Error(err))
+		}
+		log.Debug("user decoded", zap.ByteString("id", iter.Key()))
+		users = append(users, user)
+	}
+	iter.Release()
+	if err := iter.Error(); err != nil {
+		return nil, err
+	}
+	return users, nil
+}
+
+func (r *UserManagerLeveldb) getUser(username string) (*User, bool) {
 	dataBytes, err := r.userDB.Get([]byte(username), nil)
 	if err != nil {
 		log.Error("can not get user", zap.String("username", username), zap.Error(err))
@@ -80,25 +100,23 @@ func (r *UserRepositoryLeveldb) getUser(username string) (*User, bool) {
 	return &user, true
 }
 
-func (r *UserRepositoryLeveldb) openCfgDB() {
+func (r *UserManagerLeveldb) openCfgDB() {
 	var err error
-	r.cfgDB, err = leveldb.OpenFile("./rep/user_cfg", nil)
+	r.cfgDB, err = leveldb.OpenFile(r.cfgPath, nil)
 	if err != nil {
 		log.Error("can not open user config repository", zap.Error(err))
 	}
 }
 
-func (r *UserRepositoryLeveldb) openUserDB() {
+func (r *UserManagerLeveldb) openUserDB() {
 	var err error
-	r.userDB, err = leveldb.OpenFile("./rep/user", nil)
+	r.userDB, err = leveldb.OpenFile(r.userPath, nil)
 	if err != nil {
 		log.Error("can not open user repository", zap.Error(err))
 	}
 }
 
-func (r *UserRepositoryLeveldb) setRepositoryName(name string) {
-	//r.openCfgDB()
-	//defer r.cfgDB.Close()
+func (r *UserManagerLeveldb) setRepositoryName(name string) {
 	err := r.cfgDB.Put([]byte("name"), []byte(name), nil)
 	if err != nil {
 		log.Error("can not set repository name", zap.String("repository", name), zap.Error(err))
@@ -107,7 +125,7 @@ func (r *UserRepositoryLeveldb) setRepositoryName(name string) {
 	}
 }
 
-func (r *UserRepositoryLeveldb) setUser(user *User) {
+func (r *UserManagerLeveldb) setUser(user *User) {
 	var data bytes.Buffer
 	enc := gob.NewEncoder(&data)
 	err := enc.Encode(user)
@@ -118,6 +136,6 @@ func (r *UserRepositoryLeveldb) setUser(user *User) {
 	if err != nil {
 		log.Error("can not save user", zap.String("username", user.UserName), zap.Error(err))
 	} else {
-		log.Debug("user updated", zap.String("user id", user.ID.String()), zap.String("username", user.UserName))
+		log.Debug("user updated", zap.String("user ID", user.ID.String()), zap.String("username", user.UserName))
 	}
 }

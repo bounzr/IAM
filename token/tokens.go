@@ -1,13 +1,9 @@
-package tokens
+package token
 
 var (
 	tokenGenerator TokenGenerator
 )
 
 func Init() {
-	initTokenGenerator()
-}
-
-func initTokenGenerator() {
 	tokenGenerator = NewTokenGeneratorBasic()
 }

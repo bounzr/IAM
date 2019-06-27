@@ -8,23 +8,51 @@ import (
 	"strings"
 )
 
-//UserRepository contains user and profile information
-type UserRepository interface {
-	init()
-	setUser(user *User)
-	validateUser(username string, password string) error
+//UserManager contains user and profile information
+type UserManager interface {
+	close()
 	deleteUser(username string)
+	findUsers() ([]User, error)
 	getRepositoryName() string
 	getUser(username string) (*User, bool)
+	init()
 	setRepositoryName(name string)
+	setUser(user *User)
+	validateUser(username string, password string) error
 }
 
-func NewUserRepository(name string) UserRepository {
+var userRepositories map[string]UserManager
+
+func initUsers() {
+	userRepositories = make(map[string]UserManager)
+
+	//TODO different user repos management
+	//todo implementation
+	name := "main"
+	userRepo := NewUserManager(name)
+	addUserRepository(userRepo, name)
+}
+
+func addUserRepository(ur UserManager, id string) error {
+	//verify that repository already exists
+	if _, ok := userRepositories[id]; ok {
+		log.Error("add user repository", zap.Error(ErrRepositoryNotAvailable))
+		return ErrRepositoryNotAvailable
+	}
+	userRepositories[id] = ur
+	return nil
+}
+
+func NewUserManager(name string) UserManager {
 	/*
-		repo := &UserRepositoryBasic{
+		repo := &UserManagerBasic{
 			name: name,
 		}*/
-	repo := NewUserRepositoryLevelDB()
+	repo := &UserManagerLeveldb{
+		cfgPath:  "./rep/user_cfg",
+		userPath: "./rep/user",
+	}
+	repo.init()
 	repo.setRepositoryName(name)
 	return repo
 }
@@ -47,9 +75,10 @@ func AddScimUser(scimUser *scim2.User) error {
 		log.Error("password is empty", zap.String("username", scimUser.UserName), zap.Error(scim2.ErrBadRequestInvalidValue))
 		return scim2.ErrBadRequestInvalidValue
 	}
-	user := NewUser(id, username, password, repository, scimUser)
+	user := NewUser(id, username, password, repository)
+	user.setScim(scimUser)
 	users.setUser(user)
-	resourceManager.saveResource(user.GetResourceMetadata())
+	AddResource(user)
 	return nil
 }
 
@@ -66,11 +95,25 @@ func AddTechnicalUser(repository string, username string, password string) error
 		log.Error("can not get uuid", zap.String("username", username), zap.Error(err))
 		return err
 	}
-	user := NewUser(id, username, password, repository, nil)
+	user := NewUser(id, username, password, repository)
 	users.setUser(user)
-	//save the unique resource
-	resourceManager.saveResource(user.GetResourceMetadata())
 	return nil
+}
+
+//todo find users(filter, attributes)
+func FindUsers() []scim2.User {
+	var users []scim2.User
+	for repName, repo := range userRepositories {
+		repUsers, err := repo.findUsers()
+		if err != nil {
+			log.Error("can not add users from repository", zap.String("repository", repName), zap.Error(err))
+			continue
+		}
+		for _, user := range repUsers {
+			users = append(users, *user.GetScim())
+		}
+	}
+	return users
 }
 
 //GetAuthorizationRequest returns an authorization request from a user for a client by using the corresponding consent token
@@ -90,12 +133,12 @@ func GetAuthorizationRequest(user *UserCtx, consentToken *ConsentToken) (authori
 
 		return authorizationRequest, nil
 	}
-	log.Error("client authorization request not found for client", zap.String("client id", consentToken.ClientID.String()), zap.Error(ErrSessionNotFound))
+	log.Error("client authorization request not found for client", zap.String("client ID", consentToken.ClientID.String()), zap.Error(ErrSessionNotFound))
 	return nil, ErrSessionNotFound
 }
 
 //getUserRepository returns the repository with the given name
-func getUserRepository(repName string) (UserRepository, error) {
+func getUserRepository(repName string) (UserManager, error) {
 	repo, ok := userRepositories[repName]
 	if !ok {
 		log.Error("can not find repository", zap.String("repository", repName), zap.Error(ErrRepositoryNotAvailable))

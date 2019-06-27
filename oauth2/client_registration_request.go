@@ -75,7 +75,7 @@ server SHOULD display this image to the end-user during approval.
 Scope
 String containing a space-separated list of Scope values (as
 described in Section 3.3 of OAuth 2.0 [RFC6749]) that the client
-can use when requesting access tokens. If omitted, an authorization
+can use when requesting access token. If omitted, an authorization
 server MAY register a client with a default set of scopes.
 
 contacts

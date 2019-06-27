@@ -6,7 +6,6 @@ type Resource struct {
 	Metadata   Metadata `json:"meta"`
 }
 
-
 //Metadata A complex attribute containing resource metadata.  All "meta" sub-attributes are assigned by the service
 // provider (have a "mutability" of "readOnly"), and all of these sub-attributes have a "returned" characteristic of
 // "default".  This attribute SHALL be ignored when provided by clients.
@@ -16,4 +15,12 @@ type Metadata struct {
 	Location     string `json:"location,omitempty"`
 	ResourceType string `json:"resourceType,omitempty"`
 	Version      string `json:"version,omitempty"`
+}
+
+type ResourceQueryResponse struct {
+	Schemas      []string    `json:"schemas"`
+	TotalResults int         `json:"totalResults"`
+	StartIndex   int         `json:"startIndex,omitempty"`
+	ItemsPerPage int         `json:"itemsPerPage,omitempty"`
+	Resources    interface{} `json:"Resources,omitempty"`
 }

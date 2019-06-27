@@ -1,4 +1,4 @@
-package tokens
+package token
 
 type TokenGenerator interface {
 	getToken() []byte

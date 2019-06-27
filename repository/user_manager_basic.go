@@ -5,26 +5,30 @@ import (
 	"strings"
 )
 
-//UserRepositoryBasic In memory repository. Used for tests
-type UserRepositoryBasic struct {
+//UserManagerBasic In memory repository. Used for tests
+type UserManagerBasic struct {
 	name  string
 	users map[string]*User
 }
 
 //init the repository
-func (r *UserRepositoryBasic) init() {
+func (r *UserManagerBasic) init() {
 	r.users = make(map[string]*User)
 }
 
+func (r *UserManagerBasic) close() {
+	//nothing
+}
+
 //setUser register a new user
-func (r *UserRepositoryBasic) setUser(user *User) {
+func (r *UserManagerBasic) setUser(user *User) {
 	//add the new user to the repo
 	r.users[user.UserName] = user
 	return
 }
 
 //validateUser if username matches password returns nil, otherwise returns error
-func (r *UserRepositoryBasic) validateUser(username string, password string) error {
+func (r *UserManagerBasic) validateUser(username string, password string) error {
 	//all usernames handled in lowercase
 	username = strings.ToLower(username)
 	user := r.users[username]
@@ -49,16 +53,26 @@ func (r *UserRepositoryBasic) validateUser(username string, password string) err
 	//TODO still not hashing the password in memory.
 }
 
-func (r *UserRepositoryBasic) deleteUser(username string) {
+func (r *UserManagerBasic) deleteUser(username string) {
 	delete(r.users, username)
 }
 
-func (r *UserRepositoryBasic) getRepositoryName() string {
+func (r *UserManagerBasic) getRepositoryName() string {
 	return r.name
 }
 
+func (r *UserManagerBasic) findUsers() ([]User, error) {
+	users := make([]User, len(r.users))
+	idx := 0
+	for _, user := range r.users {
+		users[idx] = *user
+		idx++
+	}
+	return users, nil
+}
+
 //getUser get user by username
-func (r *UserRepositoryBasic) getUser(username string) (*User, bool) {
+func (r *UserManagerBasic) getUser(username string) (*User, bool) {
 	//an user always has an user structure
 	usr, ok := r.users[username]
 	if !ok {
@@ -70,6 +84,6 @@ func (r *UserRepositoryBasic) getUser(username string) (*User, bool) {
 	return usr, ok
 }
 
-func (r *UserRepositoryBasic) setRepositoryName(name string) {
+func (r *UserManagerBasic) setRepositoryName(name string) {
 	r.name = name
 }

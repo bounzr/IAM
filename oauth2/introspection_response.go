@@ -5,7 +5,7 @@ The server responds with a JSON object [RFC7159] in "application/json" format wi
    	active
       REQUIRED.  Boolean indicator of whether or not the presented token is currently active.  The specifics of a token’s
 		"active" State will vary depending on the implementation of the authorization server and the information it keeps
-		about its tokens, but a "true" value return for the "active" property will generally indicate that a given token
+		about its token, but a "true" value return for the "active" property will generally indicate that a given token
 		has been issued by this authorization server, has not been revoked by the resource owner, and is within its given
 		time window of validity (e.g., after its issuance time and before its expiration time).  See Section 4 for information
 		on implementation of such checks.
