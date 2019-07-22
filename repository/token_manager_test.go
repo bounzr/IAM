@@ -38,7 +38,7 @@ var (
 	}
 )
 
-func executeTokenTest(test func(provider TokenDataProvider, access *oauth2.AccessToken)) {
+func executeTokenTest(test func(provider TokenDataProvider, access *oauth2.TokenUnit)) {
 	os.RemoveAll("../test/")
 	log, _ = zap.NewDevelopment()
 	token.Init()
@@ -53,16 +53,16 @@ func executeTokenTest(test func(provider TokenDataProvider, access *oauth2.Acces
 		provider.manager.init()
 		access, _ := oauth2.NewAccessToken(options, provider.accessDuration, provider.refreshDuration)
 		log.Info("test access token", zap.String("client", provider.clientID.String()), zap.ByteString("token", access.GetToken()))
-		provider.manager.setAccessToken(access)
+		provider.manager.setTokenUnit(access)
 		test(provider, access)
 		provider.manager.close()
 	}
 }
 
 func TestValidateToken(t *testing.T) {
-	test := func(provider TokenDataProvider, access *oauth2.AccessToken) {
+	test := func(provider TokenDataProvider, access *oauth2.TokenUnit) {
 		_, accessHint, _ := access.GetTokenHints()
-		token, ok := provider.manager.validateAccessToken(accessHint)
+		token, ok := provider.manager.getTokenUnit(accessHint)
 		if provider.isValidToken != ok {
 			t.Errorf("want valid=%v got valid=%v", provider.isValidToken, ok)
 		}

@@ -17,14 +17,23 @@ import (
 
 //newOauth2Router returns router with Oauth2 related routes
 func newOauth2Router(router *mux.Router) {
-	router.HandleFunc("/authorize", middlewareChain(oauth2AuthorizeHandler, sessionCookieSecurity)).Methods(http.MethodGet, http.MethodPost)
-	router.HandleFunc("/introspect", middlewareChain(oauth2IntrospectPostHandler, basicClientAuthSecurity)).Methods("POST")
+	router.HandleFunc("/authorize", chain(
+		oauth2AuthorizeHandler,
+		sessionCookieSecurity),
+	).Methods(http.MethodGet, http.MethodPost)
+	router.HandleFunc("/introspect", chain(
+		oauth2IntrospectHandler,
+		basicUserAuthSecurity,
+		verifyUserGroups("Admins", "ProtectedResources")),
+	).Methods("POST")
 	//TODO according to rfc anonymous registration is allowed, token may be allowed.
-	router.HandleFunc("/register", middlewareChain(oauth2RegisterPostHandler, basicUserAuthSecurity)).Methods("POST")
+	router.HandleFunc("/register", chain(oauth2RegisterHandlerPost, basicUserAuthSecurity)).Methods("POST")
 	//TODO according to rfc authorization must be token and not basic. Replace basicUserAuthSecurity
-	router.HandleFunc("/register/{id:[-a-zA-Z0-9]+}", middlewareChain(oauth2RegisterGetHandler, basicUserAuthSecurity)).Methods("GET")
-	router.HandleFunc("/revoke", middlewareChain(oauth2RevokePostHandler, basicClientAuthSecurity)).Methods("POST")
-	router.HandleFunc("/token", middlewareChain(oauth2TokenPostHandler, basicClientAuthSecurity)).Methods("POST")
+	router.HandleFunc("/register/{id:[-a-zA-Z0-9]+}", chain(
+		oauth2RegisterHandlerGet,
+		basicUserAuthSecurity)).Methods("GET")
+	router.HandleFunc("/revoke", chain(oauth2RevokeHandlerPost, basicClientAuthSecurity)).Methods("POST")
+	router.HandleFunc("/token", chain(oauth2TokenHandlerPost, basicClientAuthSecurity)).Methods("POST")
 }
 
 func oauth2AuthorizeHandler(w http.ResponseWriter, r *http.Request) {
@@ -65,8 +74,10 @@ func oauth2AuthorizeGetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	//start authorization request validation
-	err = repository.ValidateOauth2AuthorizationRequest(authorizationRequest)
-	log.Error("not valid authorization request", zap.String("client id", authorizationRequest.ClientID), zap.Error(err))
+	err = repository.ValidateAuthorizationRequest(authorizationRequest)
+	if err != nil {
+		log.Error("not valid authorization request", zap.String("client id", authorizationRequest.ClientID), zap.Error(err))
+	}
 	//immediate display errors
 	if err == oauth2.ErrClientIdentifierInfo {
 		http.Error(w, oauth2.ErrClientIdentifierInfo.Error(), http.StatusBadRequest)
@@ -216,7 +227,7 @@ func oauth2AuthorizePostHandler(w http.ResponseWriter, r *http.Request) {
 
 	//authorization code grant response
 	if strings.Compare(authReq.ResponseType, "code") == 0 {
-		authResponse, err := repository.RequestOauth2AuthorizationCode(usrCtx, authReq)
+		authResponse, err := repository.RequestAuthorizationCode(usrCtx, authReq)
 		if err != nil {
 			log.Error("can not get authorization request", zap.String("user id", usrCtx.UserID.String()), zap.String("username", usrCtx.UserName), zap.Error(err))
 			//TODO on session error must be handled better than a 500
@@ -238,7 +249,7 @@ func oauth2AuthorizePostHandler(w http.ResponseWriter, r *http.Request) {
 	//implicit code grant response
 	if strings.Compare(authReq.ResponseType, "token") == 0 {
 		options := repository.ImplicitGrantOptions(usrCtx, authReq)
-		tokenResponse, err := repository.RequestOauth2AccessToken(options)
+		tokenResponse, err := repository.RequestAccessToken(options)
 		if err != nil {
 			//TODO on session error must be handled better than a 500
 			log.Error(err.Error())
@@ -269,7 +280,7 @@ func oauth2AuthorizePostHandler(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-func oauth2IntrospectPostHandler(w http.ResponseWriter, r *http.Request) {
+func oauth2IntrospectHandler(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseForm()
 	if err != nil {
 		log.Error(err.Error())
@@ -296,7 +307,7 @@ func oauth2IntrospectPostHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	introspection := repository.IntrospectOauth2AccessToken(hint)
+	introspection := repository.IntrospectAccessToken(hint)
 	//Marshal clientInfResp to json and write to response
 	intJson, err := json.Marshal(introspection)
 	if err != nil {
@@ -316,7 +327,7 @@ func oauth2IntrospectPostHandler(w http.ResponseWriter, r *http.Request) {
      Host: server.example.com
      Authorization: Bearer reg-23410913-abewfq.123483
 **/
-func oauth2RegisterGetHandler(w http.ResponseWriter, r *http.Request) {
+func oauth2RegisterHandlerGet(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
 	client, ok := repository.GetClient(uuid.FromStringOrNil(id))
@@ -372,8 +383,8 @@ func oauth2RegisterGetHandler(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-//oauth2RegisterPostHandler is used to register a new Oauth2 client
-func oauth2RegisterPostHandler(w http.ResponseWriter, r *http.Request) {
+//oauth2RegisterHandlerPost is used to register a new Oauth2 client
+func oauth2RegisterHandlerPost(w http.ResponseWriter, r *http.Request) {
 	//initialize empty request
 	clientReq := &oauth2.ClientRegistrationRequest{}
 	//Parse json request body and use it to set fields
@@ -383,15 +394,11 @@ func oauth2RegisterPostHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//todo process client registration
-	//client, err := oauth2.NewOauth2Client(clientReq)
-	client, err := repository.NewClient(clientReq)
+	client, err := repository.NewClientFromOauth(clientReq)
 	if err != nil {
 		log.Error("can not create new client", zap.String("client name", clientReq.ClientName), zap.Error(err))
 		//todo client.GetClientRegistrationError
 	}
-
-	var clientInfResp *oauth2.ClientInformationResponse
-
 	//TODO clean context() after it was used leaving no trace
 	//TODO use better func fromContextGetUser(ctx context.Context) (*repository.User, bool)
 	if loggedUser := r.Context().Value(userCtxKey); loggedUser != nil {
@@ -401,11 +408,12 @@ func oauth2RegisterPostHandler(w http.ResponseWriter, r *http.Request) {
 		client.OwnerID = profile.UserID
 	}
 	repository.AddClient(client)
+	//todo if AddClient() err != nil
+	var clientInfResp *oauth2.ClientInformationResponse
 	clientInfResp, err = client.GetClientInformationResponse()
 	if err != nil {
 		log.Error("can not get client information response", zap.String("client id", client.ID.String()), zap.Error(err))
 	}
-
 	//Marshal clientInfResp to json and write to response
 	cirJSON, err := json.Marshal(clientInfResp)
 	if err != nil {
@@ -413,16 +421,14 @@ func oauth2RegisterPostHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
 	//Set Content-Type header so that clients will know how to read response
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	//Write json response back to response
 	w.Write(cirJSON)
 	return
 }
 
-func oauth2RevokePostHandler(w http.ResponseWriter, r *http.Request) {
+func oauth2RevokeHandlerPost(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseForm()
 	if err != nil {
 		log.Error("can not parse form", zap.Error(err))
@@ -454,7 +460,7 @@ func oauth2RevokePostHandler(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-func oauth2TokenPostHandler(w http.ResponseWriter, r *http.Request) {
+func oauth2TokenHandlerPost(w http.ResponseWriter, r *http.Request) {
 	//get client from context as it has logged in by the middleware
 	ctx := r.Context()
 	cliCtx, ok := fromContextGetClient(ctx)
@@ -518,7 +524,7 @@ func oauth2TokenPostHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokenResponse, err := repository.RequestOauth2AccessToken(options)
+	tokenResponse, err := repository.RequestAccessToken(options)
 	if err != nil {
 		log.Error("can not process access token request", zap.Error(err))
 		http.Error(w, err.Error(), http.StatusForbidden)

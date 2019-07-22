@@ -13,16 +13,20 @@ type Group struct {
 	Schemas     []string      `json:"schemas,omitempty"`
 }
 
-type GroupMember struct {
-	Ref   string `json:"$ref,omitempty"`
-	Type  string `json:"type,omitempty"`
-	Value string `json:"value,omitempty"`
+type GroupAssigner interface {
+	GetGroups() []GroupAssignment
 }
 
 type GroupAssignment struct {
 	Display string `json:"display,omitempty"`
 	Ref     string `json:"$ref,omitempty"`
 	Value   string `json:"value,omitempty"`
+}
+
+type GroupMember struct {
+	Ref   string `json:"$ref,omitempty"`
+	Type  string `json:"type,omitempty"`
+	Value string `json:"value,omitempty"`
 }
 
 func (g *Group) GetGroupAssignment() *GroupAssignment {

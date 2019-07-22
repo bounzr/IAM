@@ -1,7 +1,7 @@
 package oauth2
 
 /**
-Code Grant Access Token Request
+Code Grant Access TokenUnit Request
 
 The client makes a request to the token endpoint by sending the following parameters using the "application/x-www-form-urlencoded"
 format per Appendix B with a character encoding of UTF-8 in the HTTP request entity-body:
@@ -30,7 +30,7 @@ type AuthorizationCodeAccessTokenRequest struct {
 }
 
 /**
-Client Credentials Grant Access Token Request
+Client Credentials Grant Access TokenUnit Request
 
 The client makes a request to the token endpoint by adding the following parameters using the
 "application/x-www-form-urlencoded" format per Appendix B with a character encoding of UTF-8 in the HTTP request
@@ -57,7 +57,7 @@ type ClientCredentialsAccessTokenRequest struct {
 }
 
 /**
-Owner Password Grant Access Token Request
+Owner Password Grant Access TokenUnit Request
 
 The client makes a request to the token endpoint by adding the following parameters using the
 "application/x-www-form-urlencoded" format per Appendix B with a character encoding of UTF-8 in the HTTP request

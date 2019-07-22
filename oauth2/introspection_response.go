@@ -56,17 +56,18 @@ Content-Type: application/json
 }
 */
 type IntrospectionResponse struct {
-	Active        string `json:"active,required"`
+	Active        bool   `json:"active,required"`
 	Audience      string `json:"aud,omitempty"`
 	ClientID      string `json:"client_id,omitempty"`
 	Expires       int64  `json:"exp,omitempty"`
 	IssuedAt      int64  `json:"iat,omitempty"`
 	Issuer        string `json:"iss,omitempty"`
-	Jti           string `json:"jti,omitempty"`
 	NotBefore     int64  `json:"nbf,omitempty"`
-	Scope         string `json:"Scope,omitempty"`
+	Scope         string `json:"scope,omitempty"`
 	OwnerID       string `json:"sub,omitempty"`
+	OwnerName     string `json:"username,omitempty"`
 	TokenAuthType string `json:"token_type,omitempty"`
+	TokenID       string `json:"jti,omitempty"`
 	Username      string `json:"username,omitempty"`
 }
 

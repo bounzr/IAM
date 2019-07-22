@@ -35,10 +35,10 @@ in OAuth 2.0.
 * "client_credentials": The client credentials grant type.
 * "refresh_token": The refresh token grant type.
 * "urn:ietf:params:oauth:grant-type:jwt-bearer": The JWT Bearer
-Token Grant Type defined in OAuth JWT Bearer Token Profiles
+TokenUnit Grant Type defined in OAuth JWT Bearer TokenUnit Profiles
 [RFC7523].
 * "urn:ietf:params:oauth:grant-type:saml2-bearer": The SAML 2.0
-Bearer Assertion Grant defined in OAuth SAML 2 Bearer Token
+Bearer Assertion Grant defined in OAuth SAML 2 Bearer TokenUnit
 Profiles [RFC7522].
 If the token endpoint is used in the grant type, the value of this
 parameter MUST be the same as the value of the "grant_type"

@@ -3,7 +3,6 @@ package repository
 import (
 	"../oauth2"
 	"go.uber.org/zap"
-	"time"
 )
 
 type TokenManagerBasic struct {
@@ -11,8 +10,8 @@ type TokenManagerBasic struct {
 	authorizationCodes map[string]*oauth2.AuthorizationCode
 
 	//string is the token
-	accessTokens      map[string]*oauth2.AccessToken
-	refreshTokens     map[string]*oauth2.AccessToken
+	accessTokens      map[string]*oauth2.TokenUnit
+	refreshTokens     map[string]*oauth2.TokenUnit
 	usedTokens        map[string]struct{}
 	blackListedTokens map[string]struct{}
 }
@@ -20,8 +19,8 @@ type TokenManagerBasic struct {
 //init the repository
 func (r *TokenManagerBasic) init() {
 	r.authorizationCodes = make(map[string]*oauth2.AuthorizationCode)
-	r.accessTokens = make(map[string]*oauth2.AccessToken)
-	r.refreshTokens = make(map[string]*oauth2.AccessToken)
+	r.accessTokens = make(map[string]*oauth2.TokenUnit)
+	r.refreshTokens = make(map[string]*oauth2.TokenUnit)
 	r.usedTokens = make(map[string]struct{})
 	r.blackListedTokens = make(map[string]struct{})
 }
@@ -41,7 +40,7 @@ func (r *TokenManagerBasic) setAuthorizationCode(code *oauth2.AuthorizationCode)
 	return nil
 }
 
-func (r *TokenManagerBasic) setAccessToken(accessToken *oauth2.AccessToken) error {
+func (r *TokenManagerBasic) setTokenUnit(accessToken *oauth2.TokenUnit) error {
 	if accessToken.TokenHintType == oauth2.AccessTokenHintType {
 		at := string(accessToken.GetToken())
 		r.accessTokens[at] = accessToken
@@ -53,18 +52,14 @@ func (r *TokenManagerBasic) setAccessToken(accessToken *oauth2.AccessToken) erro
 	return nil
 }
 
-func (r *TokenManagerBasic) validateAccessToken(hint *oauth2.AccessTokenHint) (*oauth2.AccessToken, bool) {
-	var token *oauth2.AccessToken
+func (r *TokenManagerBasic) getTokenUnit(hint *oauth2.AccessTokenHint) (*oauth2.TokenUnit, bool) {
+	var token *oauth2.TokenUnit
 	var ok = false
 	if oauth2.NewTokenHintType(hint.Hint) != oauth2.RefreshTokenHintType {
 		token, ok = r.accessTokens[string(hint.Token)]
 	}
 	if !ok && oauth2.NewTokenHintType(hint.Hint) != oauth2.AccessTokenHintType {
 		token, ok = r.refreshTokens[string(hint.Token)]
-	}
-	//verify that it is not expired
-	if ok {
-		ok = token.GetExpirationTime() > time.Now().Unix()
 	}
 	//verify that the token is not blacklisted
 	if ok {

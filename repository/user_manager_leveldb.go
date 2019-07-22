@@ -3,6 +3,7 @@ package repository
 import (
 	"bytes"
 	"encoding/gob"
+	"github.com/gofrs/uuid"
 	"github.com/syndtr/goleveldb/leveldb"
 	"go.uber.org/zap"
 	"strings"
@@ -11,24 +12,31 @@ import (
 type UserManagerLeveldb struct {
 	cfgDB    *leveldb.DB
 	cfgPath  string
-	userDB   *leveldb.DB
-	userPath string
+	nameDB   *leveldb.DB
+	namePath string
+	uuidDB   *leveldb.DB
+	uuidPath string
 }
 
 func (r *UserManagerLeveldb) init() {
 	if len(r.cfgPath) == 0 {
-		r.cfgPath = "./rep/user_cfg"
+		r.cfgPath = "./rep/user/cfg"
 	}
 	r.openCfgDB()
-	if len(r.userPath) == 0 {
-		r.userPath = "./rep/user"
+	if len(r.namePath) == 0 {
+		r.namePath = "./rep/user/name"
 	}
-	r.openUserDB()
+	r.openNameDB()
+	if len(r.uuidPath) == 0 {
+		r.uuidPath = "./rep/user/uuid"
+	}
+	r.openUUIDDB()
 }
 
 func (r *UserManagerLeveldb) close() {
 	defer r.cfgDB.Close()
-	defer r.userDB.Close()
+	defer r.nameDB.Close()
+	defer r.uuidDB.Close()
 }
 
 func (r *UserManagerLeveldb) validateUser(username string, password string) error {
@@ -42,8 +50,12 @@ func (r *UserManagerLeveldb) validateUser(username string, password string) erro
 	return ErrInvalidLogin
 }
 
-func (r *UserManagerLeveldb) deleteUser(username string) {
-	err := r.userDB.Delete([]byte(username), nil)
+func (r *UserManagerLeveldb) deleteUser(userID interface{}) {
+	username := r.getUsername(userID)
+	if len(username) == 0 {
+		return
+	}
+	err := r.nameDB.Delete([]byte(username), nil)
 	if err != nil {
 		log.Error("can not delete user", zap.String("username", username), zap.Error(err))
 	} else {
@@ -63,7 +75,7 @@ func (r *UserManagerLeveldb) getRepositoryName() string {
 //todo findUsers(search parameters)
 func (r *UserManagerLeveldb) findUsers() ([]User, error) {
 	var users []User
-	iter := r.userDB.NewIterator(nil, nil)
+	iter := r.nameDB.NewIterator(nil, nil)
 	for iter.Next() {
 		dataBytes := iter.Value()
 		data := bytes.NewBuffer(dataBytes)
@@ -83,8 +95,12 @@ func (r *UserManagerLeveldb) findUsers() ([]User, error) {
 	return users, nil
 }
 
-func (r *UserManagerLeveldb) getUser(username string) (*User, bool) {
-	dataBytes, err := r.userDB.Get([]byte(username), nil)
+func (r *UserManagerLeveldb) getUser(userID interface{}) (*User, bool) {
+	username := r.getUsername(userID)
+	if len(username) == 0 {
+		return nil, false
+	}
+	dataBytes, err := r.nameDB.Get([]byte(username), nil)
 	if err != nil {
 		log.Error("can not get user", zap.String("username", username), zap.Error(err))
 		return nil, false
@@ -100,6 +116,24 @@ func (r *UserManagerLeveldb) getUser(username string) (*User, bool) {
 	return &user, true
 }
 
+func (r *UserManagerLeveldb) getUsername(userID interface{}) string {
+	switch userID.(type) {
+	case string:
+		log.Debug("userID is a string")
+		return userID.(string)
+	case uuid.UUID:
+		dataBytes, err := r.uuidDB.Get(userID.(uuid.UUID).Bytes(), nil)
+		if err != nil {
+			log.Error("can not decode uid", zap.ByteString("uuid", userID.(uuid.UUID).Bytes()), zap.Error(err))
+			return ""
+		}
+		return string(dataBytes)
+	default:
+		return ""
+	}
+
+}
+
 func (r *UserManagerLeveldb) openCfgDB() {
 	var err error
 	r.cfgDB, err = leveldb.OpenFile(r.cfgPath, nil)
@@ -108,11 +142,19 @@ func (r *UserManagerLeveldb) openCfgDB() {
 	}
 }
 
-func (r *UserManagerLeveldb) openUserDB() {
+func (r *UserManagerLeveldb) openNameDB() {
 	var err error
-	r.userDB, err = leveldb.OpenFile(r.userPath, nil)
+	r.nameDB, err = leveldb.OpenFile(r.namePath, nil)
 	if err != nil {
 		log.Error("can not open user repository", zap.Error(err))
+	}
+}
+
+func (r *UserManagerLeveldb) openUUIDDB() {
+	var err error
+	r.uuidDB, err = leveldb.OpenFile(r.uuidPath, nil)
+	if err != nil {
+		log.Error("can not open uuid repository", zap.Error(err))
 	}
 }
 
@@ -132,10 +174,15 @@ func (r *UserManagerLeveldb) setUser(user *User) {
 	if err != nil {
 		log.Error("can not encode user", zap.String("username", user.UserName), zap.Error(err))
 	}
-	err = r.userDB.Put([]byte(user.UserName), data.Bytes(), nil)
+	err = r.nameDB.Put([]byte(user.UserName), data.Bytes(), nil)
 	if err != nil {
 		log.Error("can not save user", zap.String("username", user.UserName), zap.Error(err))
 	} else {
-		log.Debug("user updated", zap.String("user ID", user.ID.String()), zap.String("username", user.UserName))
+		err = r.uuidDB.Put(user.ID.Bytes(), []byte(user.UserName), nil)
+		if err != nil {
+			log.Error("can not save user", zap.String("username", user.UserName), zap.Error(err))
+		} else {
+			log.Debug("user updated", zap.String("user ID", user.ID.String()), zap.String("username", user.UserName))
+		}
 	}
 }

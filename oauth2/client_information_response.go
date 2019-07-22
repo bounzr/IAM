@@ -53,7 +53,7 @@ type ClientInformationResponse struct {
 	ClientId                string   `json:"client_id"`
 	ClientSecret            string   `json:"client_secret,omitempty"`
 	ClientIdIssuedAt        int64    `json:"client_id_issued_at,omitempty"`
-	ClientSecretExpiresAt   int64    `json:"client_secret_expires_at,omitempty"`
+	ClientSecretExpiresAt   int64    `json:"client_secret_expires_at,omitempty"` //Time at which the client secret will expire or 0 if it will not expire
 	RedirectUris            []string `json:"redirect_uris"`
 	TokenEndpointAuthMethod string   `json:"token_endpoint_auth_method"` //todo string enum?
 	GrantTypes              []string `json:"grant_types"`                //todo array string enum?

@@ -115,9 +115,8 @@ func NewAuthorizationCode(ownerID uuid.UUID, authReq *AuthorizationRequest) *Aut
 		ExpirationTime: expiration,
 		OwnerID:        ownerID,
 		RedirectionURI: authReq.RedirectURI,
-		//Scopes:         authReq.GetScopesMap(),
-		Scope: []byte(authReq.Scope),
-		State: authReq.State,
+		Scope:          []byte(authReq.Scope),
+		State:          authReq.State,
 	}
 	return ac
 }

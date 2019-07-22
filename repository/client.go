@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"../config"
 	"../oauth2"
 	"../scim2"
 	"../utils"
@@ -13,7 +14,6 @@ type Client struct {
 	Contacts                []string
 	Created                 time.Time
 	GrantTypes              map[string]struct{}
-	Groups                  []string //who can admin the client
 	ID                      uuid.UUID
 	Jwks                    string //todo jwks object
 	JwksURI                 string
@@ -47,13 +47,9 @@ func (c *Client) GetResourceTag() *ResourceTag {
 }
 
 func (c *Client) GetScim() *scim2.Client {
-	//todo groups
-	g := scim2.GroupAssignment{
-		Display: "Employees",
-		Value:   "fc348aa8-3835-40eb-a20b-c726e15c55b5",
-		Ref:     "https://example.com/v2/Groups/fc348aa8-3835-40eb-a20b-c726e15c55b5",
-	}
-	groups := []scim2.GroupAssignment{g}
+	memberGroupFilter := make(map[string]interface{})
+	memberGroupFilter["member"] = c.ID
+	groups := FindGroupAssignments(memberGroupFilter)
 
 	client := &scim2.Client{
 		Name:                    c.Name,
@@ -78,36 +74,6 @@ func (c *Client) GetScim() *scim2.Client {
 		TosUri:                  c.TosURI,
 	}
 	return client
-}
-
-func NewClient(request *oauth2.ClientRegistrationRequest) (*Client, error) {
-	clientID, err := uuid.NewV4()
-	issuedAt := time.Now()
-
-	cli := &Client{
-		Contacts:                request.Contacts,
-		Created:                 issuedAt,
-		GrantTypes:              getSliceToMap(request.GrantTypes),
-		Groups:                  []string{"admin"}, //todo group management is done somewhere else
-		ID:                      clientID,
-		Jwks:                    request.Jwks,    //todo jwks is an object and not a string. develop object
-		JwksURI:                 request.JwksURI, //todo if jwksuri is provided get jwks from uri
-		LastModified:            issuedAt,
-		LogoURI:                 request.LogoUri,
-		Name:                    request.ClientName,
-		PolicyURI:               request.PolicyUri,
-		RedirectURIs:            getSliceToMap(request.RedirectUris),
-		ResponseTypes:           getSliceToMap(request.ResponseTypes),
-		Scope:                   strings.TrimSpace(request.Scope),
-		Secret:                  utils.GetRandomPassword(16), //todo password generator
-		SecretExpiresAt:         issuedAt.AddDate(1, 0, 0),   //todo expiration date
-		SoftwareID:              request.SoftwareId,
-		SoftwareVersion:         request.SoftwareVersion,
-		TokenEndpointAuthMethod: request.TokenEndpointAuthMethod,
-		TosURI:                  request.TosUri,
-		URI:                     request.ClientUri,
-	}
-	return cli, err
 }
 
 func getCommonScope(scope1 string, scope2 string) (commonScope string) {
@@ -225,12 +191,75 @@ func (c *Client) HasRedirectURI(redirectURI string) (ok bool) {
 	return
 }
 
-//todo secret expires. Secret must be encrypted + salted
+func NewClientFromOauth(request *oauth2.ClientRegistrationRequest) (*Client, error) {
+	clientID, err := uuid.NewV4()
+	issuedAt := time.Now()
+	secretExpiresAt := issuedAt.Add(config.IAM.Clients.GetSecretDuration())
+
+	cli := &Client{
+		Contacts:                request.Contacts,
+		Created:                 issuedAt,
+		GrantTypes:              getSliceToMap(request.GrantTypes),
+		ID:                      clientID,
+		Jwks:                    request.Jwks,    //todo jwks is an object and not a string. develop object
+		JwksURI:                 request.JwksURI, //todo if jwksuri is provided get jwks from uri
+		LastModified:            issuedAt,
+		LogoURI:                 request.LogoUri,
+		Name:                    request.ClientName,
+		PolicyURI:               request.PolicyUri,
+		RedirectURIs:            getSliceToMap(request.RedirectUris),
+		ResponseTypes:           getSliceToMap(request.ResponseTypes),
+		Scope:                   strings.TrimSpace(request.Scope),
+		Secret:                  utils.GetRandomPassword(16), //todo password generator
+		SecretExpiresAt:         secretExpiresAt,
+		SoftwareID:              request.SoftwareId,
+		SoftwareVersion:         request.SoftwareVersion,
+		TokenEndpointAuthMethod: request.TokenEndpointAuthMethod,
+		TosURI:                  request.TosUri,
+		URI:                     request.ClientUri,
+	}
+	return cli, err
+}
+
+func NewClientFromScim(request *scim2.Client) (*Client, error) {
+	clientID, err := uuid.NewV4()
+	issuedAt := time.Now()
+	secretExpiresAt := issuedAt.Add(config.IAM.Clients.GetSecretDuration())
+
+	cli := &Client{
+		Contacts:                request.Contacts,
+		Created:                 issuedAt,
+		GrantTypes:              getSliceToMap(request.GrantTypes),
+		ID:                      clientID,
+		Jwks:                    request.Jwks,    //todo jwks is an object and not a string. develop object
+		JwksURI:                 request.JwksURI, //todo if jwksuri is provided get jwks from uri
+		LastModified:            issuedAt,
+		LogoURI:                 request.LogoUri,
+		Name:                    request.Name,
+		PolicyURI:               request.PolicyUri,
+		RedirectURIs:            getSliceToMap(request.RedirectUris),
+		ResponseTypes:           getSliceToMap(request.ResponseTypes),
+		Scope:                   strings.TrimSpace(request.Scope),
+		Secret:                  utils.GetRandomPassword(16),
+		SecretExpiresAt:         secretExpiresAt,
+		SoftwareID:              request.SoftwareId,
+		SoftwareVersion:         request.SoftwareVersion,
+		TokenEndpointAuthMethod: request.TokenEndpointAuthMethod,
+		TosURI:                  request.TosUri,
+		URI:                     request.URI,
+	}
+	return cli, err
+}
+
+//todo Secret must be encrypted + salted
+//todo client secret must be modifiable and the secretExpiresAt reset
 func (c *Client) ValidateClientSecret(secret string) (ok bool) {
+	if !utils.InTimeSpan(c.Created, c.SecretExpiresAt, time.Now()) {
+		return false
+	}
 	ok = false
 	if strings.Compare(c.Secret, secret) == 0 {
 		ok = true
-		//todo if client expired validation
 	}
 	return
 }

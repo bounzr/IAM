@@ -4,14 +4,12 @@ import (
 	"github.com/gofrs/uuid"
 	"strings"
 	"time"
-
-	"../utils"
 )
 
 type Client struct {
 	Contacts                []string
 	GrantTypes              map[GrantType]struct{}
-	Groups                  []string //who can admin the client
+	Groups                  []string //who can admin the client todo
 	ID                      uuid.UUID
 	IDIssuedAt              time.Time
 	Jwks                    string //todo jwks object
@@ -47,37 +45,6 @@ type ClientSummary struct {
 	Name   string
 	Groups []string
 	Owner  string
-}
-
-//NewOauth2Client creates a new oauth2 client based on the client registration request. Returns pointer to client or error
-func NewOauth2Client(request *ClientRegistrationRequest) (*Client, error) {
-	clientID, err := uuid.NewV4()
-	issuedAt := time.Now().UTC()
-
-	cli := &Client{
-		Contacts:                request.Contacts,
-		GrantTypes:              getGrantTypes(request.GrantTypes),
-		Groups:                  []string{"admin"},
-		ID:                      clientID,
-		IDIssuedAt:              issuedAt,
-		Jwks:                    request.Jwks,    //todo jwks is an object and not a string. develop object
-		JwksURI:                 request.JwksURI, //todo if jwksuri is provided get jwks from uri
-		LogoURI:                 request.LogoUri,
-		Name:                    request.ClientName,
-		PolicyURI:               request.PolicyUri,
-		RedirectUris:            getRedirectURIs(request.RedirectUris),
-		ResponseTypes:           getResponseTypes(request.ResponseTypes),
-		Scope:                   strings.TrimSpace(request.Scope),
-		Secret:                  utils.GetRandomPassword(16),
-		SecretExpiresAt:         issuedAt.AddDate(1, 0, 0),
-		SoftwareID:              request.SoftwareId,
-		SoftwareVersion:         request.SoftwareVersion,
-		TokenEndpointAuthMethod: getTokenEndpointAuthMethod(request.TokenEndpointAuthMethod),
-		TosURI:                  request.TosUri,
-		URI:                     request.ClientUri,
-	}
-
-	return cli, err
 }
 
 func NewClientCtx(id uuid.UUID, name string, logoURI string) *ClientCtx {

@@ -11,7 +11,7 @@ import (
 
 //newBounzrRouter returns a new router with Bounzr basic endpoints
 func newBounzrRouter(router *mux.Router) {
-	router.HandleFunc("/", middlewareChain(indexPageGetHandler, sessionCookieSecurity)).Methods(http.MethodGet)
+	router.HandleFunc("/", chain(indexPageGetHandler, sessionCookieSecurity)).Methods(http.MethodGet)
 	router.HandleFunc("/login", loginPageHandler).Methods(http.MethodGet, http.MethodPost)
 	router.HandleFunc("/logout", logoutPageGetHandler).Methods(http.MethodGet)
 	router.HandleFunc("/register", registerPageHandler).Methods(http.MethodGet, http.MethodPost)
@@ -25,12 +25,12 @@ func indexPageGetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func loginPageHandler(w http.ResponseWriter, r *http.Request){
-	if r.Method == http.MethodGet{
-		loginPageGetHandler(w,r)
+func loginPageHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		loginPageGetHandler(w, r)
 	}
-	if r.Method == http.MethodPost{
-		loginPagePostHandler(w,r)
+	if r.Method == http.MethodPost {
+		loginPagePostHandler(w, r)
 	}
 }
 
@@ -64,10 +64,10 @@ func loginPagePostHandler(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	username := r.PostForm.Get("username")
 	password := r.PostForm.Get("password")
-	user, err := authenticateUser(username, password)
-	if err != nil {
-		log.Error("can not authenticate user", zap.String("username", username), zap.Error(err))
-		pages.RenderPage(w, "login.html", err.Error())
+	user, valid := authenticateUser(username, password)
+	if !valid {
+		log.Debug("user authentication not valid", zap.String("username", username))
+		pages.RenderPage(w, "login.html", repository.ErrInvalidLogin.Error())
 		return
 	}
 	sessionToken := repository.NewSessionToken(user)
@@ -87,12 +87,12 @@ func logoutPageGetHandler(w http.ResponseWriter, r *http.Request) {
 	landLoginRequest(w, r)
 }
 
-func registerPageHandler(w http.ResponseWriter, r *http.Request){
-	if r.Method == http.MethodGet{
-		registerPageGetHandler(w,r)
+func registerPageHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		registerPageGetHandler(w, r)
 	}
-	if r.Method == http.MethodPost{
-		registerPagePostHandler(w,r)
+	if r.Method == http.MethodPost {
+		registerPagePostHandler(w, r)
 	}
 }
 
@@ -104,12 +104,13 @@ func registerPageGetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+//todo replace AddAdminUser with addUserScim
 func registerPagePostHandler(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	username := r.PostForm.Get("username")
 	password := r.PostForm.Get("password")
 	//todo use scim
-	err := repository.AddTechnicalUser("main", username, password)
+	err := repository.AddAdminUser("main", username, password)
 	if err != nil {
 		log.Error("can not add technical user", zap.String("username", username), zap.Error(err))
 		pages.RenderPage(w, "register.html", err.Error())

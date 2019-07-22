@@ -38,7 +38,7 @@ func (gr *GroupManagerLeveldb) findGroups(conditions map[string]interface{}) ([]
 			nameToFind = nameCondition.(string)
 		}
 		if len(nameToFind) > 0 {
-			log.Debug("finding groups with name condition", zap.String("name", conditions["name"].(string)))
+			log.Debug("searching groups with name condition", zap.String("name", conditions["name"].(string)))
 			if strings.Compare(nameToFind, group.Metadata.Name) != 0 {
 				continue
 			}
@@ -47,7 +47,7 @@ func (gr *GroupManagerLeveldb) findGroups(conditions map[string]interface{}) ([]
 		var memberToFind uuid.UUID
 		if memberCondition != nil && reflect.TypeOf(memberToFind) == reflect.TypeOf(uuid.UUID{}) {
 			memberToFind = memberCondition.(uuid.UUID)
-			log.Debug("finding groups with member condition", zap.String("member", conditions["member"].(uuid.UUID).String()))
+			log.Debug("searching groups with member condition", zap.String("member", conditions["member"].(uuid.UUID).String()))
 			_, ok := group.Members[memberToFind]
 			if !ok {
 				continue

@@ -2,6 +2,7 @@ package oauth2
 
 import (
 	"../token"
+	"../utils"
 	"github.com/gofrs/uuid"
 	"time"
 )
@@ -82,23 +83,24 @@ HTTP/1.1 302 Found
 Location: http://example.com/cb#access_token=2YotnFZFEjr1zCsicMWpAA&state=xyz&token_type=example&expires_in=3600
 */
 
-type AccessToken struct {
-	AccessToken    []byte    //access_token
+type TokenUnit struct {
+	Active         bool
 	ClientID       uuid.UUID //client_id of the Relying Party as an client value
-	ExpirationTime time.Time //Expiration time on or after which the ID Token MUST NOT be accepted for processing
+	ExpirationTime time.Time //Expiration time on or after which the ID TokenUnit MUST NOT be accepted for processing
 	IssuedAt       time.Time
-	Issuer         string    //identifies the principal that issued the AccessToken
-	NotBefore      time.Time //the time before which the AccessToken MUST NOT be accepted for processing
-	RefreshToken   []byte
+	Issuer         string    //identifies the principal that issued the TokenUnit
+	NotBefore      time.Time //the time before which the TokenUnit MUST NOT be accepted for processing
 	Scope          []byte
 	State          string
-	OwnerID        uuid.UUID     //user_id A locally unique and never reassigned identifier within the Issuer for the End-User
+	OwnerID        uuid.UUID //user_id A locally unique and never reassigned identifier within the Issuer for the End-User
+	ParentToken    []byte
+	Token          []byte        //access_token or refresh_token
 	TokenAuthType  TokenAuthType //bearer, mac
 	TokenHintType  TokenHintType //access_token, refresh_token
 }
 
 type AccessTokenOptions struct {
-	AddRefreshToken bool      //include refresh AccessToken
+	AddRefreshToken bool      //include refresh TokenUnit
 	ClientID        uuid.UUID //client_id
 	Issuer          string    //server host
 	Scope           []byte
@@ -178,83 +180,113 @@ type AccessTokenErrorResponse struct {
 	State            string `json:State`
 }
 
-func NewAccessToken(opt *AccessTokenOptions, accessDuration time.Duration, refreshDuration time.Duration) (accessToken *AccessToken, refreshToken *AccessToken) {
-	createTime := time.Now()
-	expireTimeAccess := createTime.Add(accessDuration)
-	accToken := token.GetToken()
-	accessToken = &AccessToken{
-		AccessToken:    accToken,
+func NewTokenSet(opt *AccessTokenOptions, accessDuration time.Duration, refreshDuration time.Duration) (accessToken *TokenUnit, refreshToken *TokenUnit) {
+	creationTime := time.Now()
+	accessToken = &TokenUnit{
+		Active:         true,
 		ClientID:       opt.ClientID,
-		ExpirationTime: expireTimeAccess,
-		IssuedAt:       createTime,
+		ExpirationTime: creationTime.Add(accessDuration),
+		IssuedAt:       creationTime,
 		Issuer:         opt.Issuer,
-		NotBefore:      createTime,
+		NotBefore:      creationTime,
 		Scope:          []byte(opt.Scope),
 		State:          opt.State,
 		OwnerID:        opt.OwnerID,
-		RefreshToken:   nil,
+		ParentToken:    nil,
+		Token:          token.GetToken(),
 		TokenAuthType:  NewTokenAuthType("Bearer"),
 		TokenHintType:  NewTokenHintType("access_token"),
 	}
-	if opt.AddRefreshToken {
-		refreshToken = NewRefreshToken(accessToken, refreshDuration)
-		accessToken.RefreshToken = refreshToken.RefreshToken
+	if !opt.AddRefreshToken {
+		return accessToken, nil
 	}
-	return
-}
 
-func NewRefreshToken(accessToken *AccessToken, duration time.Duration) (refreshToken *AccessToken) {
-	createTime := time.Now()
-	expireTimeRefresh := accessToken.ExpirationTime.Add(duration)
-	token := token.GetToken()
-	refreshToken = &AccessToken{
-		AccessToken:    accessToken.AccessToken,
-		ClientID:       accessToken.ClientID,
-		ExpirationTime: expireTimeRefresh,
-		IssuedAt:       createTime,
-		Issuer:         accessToken.Issuer,
-		NotBefore:      accessToken.IssuedAt,
-		Scope:          accessToken.Scope,
-		State:          "",
-		OwnerID:        accessToken.OwnerID,
-		RefreshToken:   token,
+	refreshToken = &TokenUnit{
+		Active:         true,
+		ClientID:       opt.ClientID,
+		ExpirationTime: creationTime.Add(refreshDuration),
+		IssuedAt:       creationTime,
+		Issuer:         opt.Issuer,
+		NotBefore:      creationTime,
+		Scope:          []byte(opt.Scope),
+		State:          opt.State,
+		OwnerID:        opt.OwnerID,
+		ParentToken:    accessToken.Token,
+		Token:          token.GetToken(),
 		TokenAuthType:  NewTokenAuthType("Bearer"),
 		TokenHintType:  NewTokenHintType("refresh_token"),
 	}
-	accessToken.RefreshToken = token
-	return refreshToken
+
+	return accessToken, refreshToken
 }
 
-func (t *AccessToken) GetAccessTokenResponse() (response *AccessTokenResponse) {
-	response = &AccessTokenResponse{}
-	response.AccessToken = string(t.AccessToken)
-	response.ExpiresIn = t.GetExpirationTime() - time.Now().Unix()
-	response.RefreshToken = string(t.RefreshToken)
-	response.Scope = t.GetScope()
-	response.State = t.State
-	response.TokenAuthType = t.TokenAuthType.String()
+func NewRefreshToken(accessToken *TokenUnit, duration time.Duration) (refreshToken *TokenUnit) {
+	creationTime := time.Now()
+	refreshToken = &TokenUnit{
+		Active:         true,
+		ClientID:       accessToken.ClientID,
+		ExpirationTime: creationTime.Add(duration),
+		IssuedAt:       creationTime,
+		Issuer:         accessToken.Issuer,
+		NotBefore:      creationTime,
+		Scope:          []byte(accessToken.Scope),
+		State:          accessToken.State,
+		OwnerID:        accessToken.OwnerID,
+		ParentToken:    accessToken.Token,
+		Token:          token.GetToken(),
+		TokenAuthType:  NewTokenAuthType("Bearer"),
+		TokenHintType:  NewTokenHintType("refresh_token"),
+	}
 	return
 }
 
-func (t *AccessToken) GetClient() (clientID uuid.UUID) {
+func GetAccessTokenResponse(accessToken, refreshToken *TokenUnit) (response *AccessTokenResponse) {
+	expiresIn := accessToken.GetExpirationTime() - time.Now().Unix()
+	if expiresIn < 0 {
+		expiresIn = 0
+	}
+	if refreshToken != nil {
+		response = &AccessTokenResponse{
+			AccessToken:   string(accessToken.Token),
+			ExpiresIn:     expiresIn,
+			RefreshToken:  string(refreshToken.Token),
+			Scope:         accessToken.GetScope(),
+			State:         accessToken.State,
+			TokenAuthType: accessToken.TokenAuthType.String(),
+		}
+	} else {
+		response = &AccessTokenResponse{
+			AccessToken:   string(accessToken.Token),
+			ExpiresIn:     expiresIn,
+			Scope:         accessToken.GetScope(),
+			State:         accessToken.State,
+			TokenAuthType: accessToken.TokenAuthType.String(),
+		}
+	}
+	return
+}
+
+func (t *TokenUnit) GetClient() (clientID uuid.UUID) {
 	return t.ClientID
 }
 
-func (t *AccessToken) GetExpirationTime() int64 {
+func (t *TokenUnit) GetExpirationTime() int64 {
 	return t.ExpirationTime.Unix()
 }
 
-func (t *AccessToken) GetIntrospectionResponse() (response *IntrospectionResponse) {
-	ok := t.GetExpirationTime() > time.Now().Unix()
-	//if not ok then return false
-	if !ok {
-		response = &IntrospectionResponse{
-			Active: "false",
-		}
+func (t *TokenUnit) GetIntrospectionResponse() (response *IntrospectionResponse) {
+	response = &IntrospectionResponse{
+		Active: false,
+	}
+	if !t.Active {
+		return
+	}
+	if !utils.InTimeSpan(t.NotBefore, t.ExpirationTime, time.Now()) {
+		t.Active = false
 		return
 	}
 	response = &IntrospectionResponse{
-		Active:        "true",
+		Active:        t.Active,
 		ClientID:      t.GetClient().String(),
 		Expires:       t.GetExpirationTime(),
 		IssuedAt:      t.GetIssuedAt(),
@@ -268,45 +300,41 @@ func (t *AccessToken) GetIntrospectionResponse() (response *IntrospectionRespons
 	return
 }
 
-func (t *AccessToken) GetIssuedAt() int64 {
+func (t *TokenUnit) GetIssuedAt() int64 {
 	return t.IssuedAt.Unix()
 }
 
-func (t *AccessToken) GetIssuer() (issuer string) {
+func (t *TokenUnit) GetIssuer() (issuer string) {
 	return t.Issuer
 }
 
-func (t *AccessToken) GetNotBefore() int64 {
+func (t *TokenUnit) GetNotBefore() int64 {
 	return t.NotBefore.Unix()
 }
 
-func (t *AccessToken) GetScope() (scope string) {
+func (t *TokenUnit) GetScope() (scope string) {
 	return string(t.Scope)
 }
 
-func (t *AccessToken) GetResourceOwner() (owner uuid.UUID) {
+func (t *TokenUnit) GetResourceOwner() (owner uuid.UUID) {
 	return t.OwnerID
 }
 
-func (t *AccessToken) GetToken() (token []byte) {
-	token = nil
-	if t.TokenHintType == RefreshTokenHintType {
-		token = t.RefreshToken
-	} else {
-		token = t.AccessToken
-	}
+func (t *TokenUnit) GetToken() (token []byte) {
+	token = t.Token
 	return
 }
 
-func (t *AccessToken) GetTokenAuthType() (tokenType string) {
+func (t *TokenUnit) GetTokenAuthType() (tokenType string) {
 	return t.TokenAuthType.String()
 }
 
-func (t *AccessToken) GetTokenHints() (clientID uuid.UUID, accessToken *AccessTokenHint, refreshToken *AccessTokenHint) {
+/*
+func (t *TokenUnit) GetTokenHints() (clientID uuid.UUID, accessToken *AccessTokenHint, refreshToken *AccessTokenHint) {
 	clientID = t.ClientID
-	if len(t.AccessToken) > 0 {
+	if len(t.Token) > 0 {
 		accessToken = &AccessTokenHint{
-			Token: string(t.AccessToken),
+			Token: string(t.Token),
 			Hint:  AccessTokenHintType.String(),
 		}
 	}
@@ -319,6 +347,16 @@ func (t *AccessToken) GetTokenHints() (clientID uuid.UUID, accessToken *AccessTo
 	return
 }
 
-func (t *AccessToken) ValidateScope(requestedScope string) (validatedScope string) {
+*/
+
+func (t *TokenUnit) GetTokenHint() *AccessTokenHint {
+	hint := &AccessTokenHint{
+		Token: string(t.Token),
+		Hint:  AccessTokenHintType.String(),
+	}
+	return hint
+}
+
+func (t *TokenUnit) ValidateScope(requestedScope string) (validatedScope string) {
 	return getCommonScope(string(t.Scope), requestedScope)
 }

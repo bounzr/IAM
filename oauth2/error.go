@@ -62,7 +62,7 @@ var (
 	//ErrClientIdentifierInfo returns error to be displayed describing that the Client Identifier is wrong
 	ErrClientIdentifierInfo = errors.New("client identifier is missing or invalid")
 
-	//Token Request error
+	//TokenUnit Request error
 	ErrAccessDenied       = errors.New("access_denied")
 	ErrAccessDeniedInfo   = errors.New("the resource owner or authorization server denied the request")
 	ErrInvalidRequest     = errors.New("invalid_request")

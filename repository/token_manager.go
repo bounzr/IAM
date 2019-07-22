@@ -3,8 +3,11 @@ package repository
 import (
 	"../config"
 	"../oauth2"
+	"../utils"
+	"bytes"
 	"github.com/gofrs/uuid"
 	"strings"
+	"time"
 
 	"go.uber.org/zap"
 )
@@ -13,10 +16,66 @@ type TokenManager interface {
 	deleteAccessToken(tokenHint *oauth2.AccessTokenHint)
 	init()
 	close()
-	setAccessToken(accessToken *oauth2.AccessToken) error
+	setTokenUnit(token *oauth2.TokenUnit) error
 	setAuthorizationCode(code *oauth2.AuthorizationCode) error
-	validateAccessToken(tokenHint *oauth2.AccessTokenHint) (token *oauth2.AccessToken, ok bool)
+	getTokenUnit(tokenHint *oauth2.AccessTokenHint) (token *oauth2.TokenUnit, ok bool)
 	validateAuthorizationCode(request *oauth2.AuthorizationCodeAccessTokenRequest) (code *oauth2.AuthorizationCode, ok bool)
+}
+
+func AuthorizationCodeGrantOptions(cliCtx *oauth2.ClientCtx, request *oauth2.AuthorizationCodeAccessTokenRequest) *oauth2.AccessTokenOptions {
+	client, found := GetClient(cliCtx.GetClientID())
+	if !found {
+		log.Error("request not valid", zap.String("client ID", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrInvalidRequestInfo))
+		return nil
+	}
+	//validate that logged in client matches the access token request attributes
+	if !validateClientAllowsCodeRequest(client, request) {
+		log.Error("client did not accept the code request", zap.String("client ID", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrInvalidRequestInfo))
+		return nil
+	}
+	authCode, ok := tokenManager.validateAuthorizationCode(request)
+	if !ok {
+		log.Error("invalid authorization code", zap.String("client ID", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrInvalidRequestInfo))
+		return nil
+	}
+	options := &oauth2.AccessTokenOptions{
+		ClientID:        authCode.ClientID,
+		AddRefreshToken: true,
+		Scope:           authCode.Scope,
+		OwnerID:         authCode.OwnerID,
+	}
+	return options
+}
+
+func DeleteOauth2AccessToken(tokenHint *oauth2.AccessTokenHint) {
+	tokenManager.deleteAccessToken(tokenHint)
+}
+
+func getAccessTokens(opt *oauth2.AccessTokenOptions) (accessToken, refreshToken *oauth2.TokenUnit) {
+	accessToken, refreshToken = oauth2.NewTokenSet(opt, config.IAM.Tokens.GetAccessDuration(), config.IAM.Tokens.GetRefreshDuration())
+	err := tokenManager.setTokenUnit(accessToken)
+	if err != nil {
+		log.Error("could not get access token", zap.String("client ID", opt.ClientID.String()), zap.String("owner ID", opt.OwnerID.String()))
+		return nil, nil
+	}
+	if refreshToken != nil {
+		err = tokenManager.setTokenUnit(refreshToken)
+		if err != nil {
+			log.Error("could not get refresh token", zap.String("client ID", opt.ClientID.String()), zap.String("owner ID", opt.OwnerID.String()))
+			return accessToken, nil
+		}
+	}
+	return accessToken, refreshToken
+}
+
+func getRefreshTokens(token *oauth2.TokenUnit) (accessToken, refreshToken *oauth2.TokenUnit) {
+	refreshToken = oauth2.NewRefreshToken(token, config.IAM.Tokens.GetRefreshDuration())
+	err := tokenManager.setTokenUnit(refreshToken)
+	if err != nil {
+		log.Error("could not get refresh token", zap.String("client ID", token.ClientID.String()), zap.String("owner ID", token.OwnerID.String()))
+		return token, nil
+	}
+	return token, refreshToken
 }
 
 func initTokens() {
@@ -30,22 +89,203 @@ func initTokens() {
 	tokenManager.init()
 }
 
-func getAccessToken(opt *oauth2.AccessTokenOptions) (token *oauth2.AccessToken) {
-	accessToken, refreshToken := oauth2.NewAccessToken(opt, config.IAM.Tokens.GetAccessDuration(), config.IAM.Tokens.GetRefreshDuration())
-	_, ath, rth := accessToken.GetTokenHints()
-	_, athExists := tokenManager.validateAccessToken(ath)
-	rthExists := false
-	if rth != nil {
-		_, rthExists = tokenManager.validateAccessToken(rth)
+func IntrospectAccessToken(hint *oauth2.AccessTokenHint) (response *oauth2.IntrospectionResponse) {
+	token, ok := ValidateAccessToken(hint)
+	if !ok {
+		response = &oauth2.IntrospectionResponse{
+			Active: false,
+		}
+		return
 	}
-	if athExists || rthExists {
-		return getAccessToken(opt)
+	response = token.GetIntrospectionResponse()
+	owner, ok := GetUser(uuid.FromStringOrNil(response.OwnerID))
+	if ok {
+		response.Username = owner.UserName
 	}
-	tokenManager.setAccessToken(accessToken)
-	if refreshToken != nil {
-		tokenManager.setAccessToken(refreshToken)
+	client, ok := GetClient(uuid.FromStringOrNil(response.ClientID))
+	if ok {
+		response.Audience = client.URI
 	}
-	return accessToken
+	response.Issuer = "https://" + config.IAM.Server.Hostname + ":" + config.IAM.Server.Port
+	response.TokenID = string(token.Token)
+	return
+}
+
+func ValidateAccessToken(hint *oauth2.AccessTokenHint) (token *oauth2.TokenUnit, ok bool) {
+	token, ok = tokenManager.getTokenUnit(hint)
+	if !ok {
+		return nil, false
+	}
+	if !token.Active {
+		return nil, false
+	}
+	if !utils.InTimeSpan(token.IssuedAt, token.ExpirationTime, time.Now()) {
+		token.Active = false
+		tokenManager.setTokenUnit(token)
+		return nil, false
+	}
+	return token, ok
+}
+
+func ImplicitGrantOptions(userCtx *UserCtx, request *oauth2.AuthorizationRequest) *oauth2.AccessTokenOptions {
+	client, found := GetClient(uuid.FromStringOrNil(request.ClientID))
+	if !found {
+		log.Error("request not valid", zap.String("client ID", request.ClientID), zap.Error(oauth2.ErrInvalidRequestInfo))
+		return nil
+	}
+	//validate that logged in client matches the access token request attributes
+	if !validateClientAllowsImplicitRequest(client, request) {
+		log.Error("client did not accept the request", zap.String("client ID", request.ClientID), zap.Error(oauth2.ErrInvalidRequestInfo))
+		return nil
+	}
+	validScope := client.ValidateScope(request.Scope)
+	options := &oauth2.AccessTokenOptions{
+		ClientID:        client.ID,
+		AddRefreshToken: false,
+		Scope:           []byte(validScope),
+		OwnerID:         userCtx.UserID,
+		State:           request.State,
+	}
+	return options
+}
+
+func OwnerPasswordGrantOptions(cliCtx *oauth2.ClientCtx, request *oauth2.OwnerPasswordAccessTokenRequest) *oauth2.AccessTokenOptions {
+	client, found := GetClient(cliCtx.GetClientID())
+	if !found {
+		log.Error("request not valid", zap.String("client ID", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrInvalidRequestInfo))
+		return nil
+	}
+	//validate that logged in client matches the access token request attributes
+	if !validateClientAllowsPasswordRequest(client, request) {
+		log.Error("client did not accept the request", zap.String("client ID", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrInvalidRequestInfo))
+		return nil
+	}
+	userCtx, valid := ValidateUser(request.Username, request.Password)
+	if !valid {
+		log.Error("invalid user credentials", zap.String("client ID", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrAccessDeniedInfo))
+		return nil
+	}
+	validScope := client.ValidateScope(request.Scope)
+	options := &oauth2.AccessTokenOptions{
+		ClientID:        client.ID,
+		AddRefreshToken: true,
+		Scope:           []byte(validScope),
+		OwnerID:         userCtx.UserID,
+	}
+	return options
+}
+
+func RefreshTokenGrantOptions(cliCtx *oauth2.ClientCtx, request *oauth2.RefreshAccessTokenRequest) *oauth2.AccessTokenOptions {
+	client, found := GetClient(cliCtx.GetClientID())
+	if !found {
+		log.Error("request not valid", zap.String("client ID", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrInvalidRequestInfo))
+		return nil
+	}
+	//validate that logged in client matches the access token request attributes
+	if !validateClientAllowsRefreshRequest(client, request) {
+		log.Error("client did not accept the request", zap.String("client ID", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrInvalidRequestInfo))
+		return nil
+	}
+	refreshToken, ok := tokenManager.getTokenUnit(request.GetAccessTokenHint())
+	if !ok {
+		log.Error("invalid refresh token", zap.String("client ID", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrAccessDeniedInfo))
+		return nil
+	}
+	validScope := client.ValidateScope(request.Scope)
+	validScope = refreshToken.ValidateScope(validScope)
+
+	options := &oauth2.AccessTokenOptions{
+		ClientID:        refreshToken.GetClient(),
+		AddRefreshToken: true,
+		Scope:           []byte(validScope),
+		OwnerID:         refreshToken.GetResourceOwner(),
+	}
+	return options
+}
+
+func RequestAccessToken(opt *oauth2.AccessTokenOptions) (response *oauth2.AccessTokenResponse, err error) {
+	//initial validation. Get owner and client
+	if opt == nil {
+		return nil, oauth2.ErrInvalidRequest
+	}
+	client, found := GetClient(opt.ClientID)
+	if !found {
+		return nil, oauth2.ErrUnauthorizedClient
+	}
+	owner, ok := GetUser(opt.OwnerID)
+	if !ok {
+		return nil, oauth2.ErrUnauthorizedClient
+	}
+
+	//refresh token always removed and replaced if requested
+	owner.DeleteClientRefreshToken(client.ID)
+
+	//review if owner previously approved an access token for client
+	accessTokenHint, ok := owner.GetClientAccessToken(client.ID)
+	var accessToken *oauth2.TokenUnit
+	if ok {
+		//review if token is valid in the repository
+		accessToken, ok = ValidateAccessToken(accessTokenHint)
+		//return if token still exists and valid or remove invalid token from user
+		if !ok {
+			owner.DeleteClientAccessToken(client.ID)
+		}
+	}
+
+	//compare scopes requested with access token
+	if accessToken != nil {
+		space := []byte{' '}
+		oldScope := accessToken.Scope
+		newScope := bytes.Split(opt.Scope, space)
+
+		for _, element := range newScope {
+			if !bytes.Contains(oldScope, element) {
+				owner.DeleteClientAccessToken(client.ID)
+				accessToken = nil
+				break
+			}
+		}
+	}
+
+	//access token exists but regenerate refresh token required
+	if accessToken != nil {
+		//is refresh token requested?
+		if opt.AddRefreshToken {
+			response = owner.SetClientTokens(getRefreshTokens(accessToken))
+		} else {
+			owner.DeleteClientRefreshToken(opt.ClientID)
+			response = owner.SetClientTokens(accessToken, nil)
+		}
+	} else {
+		//generate all token from scratch since we couldnt find an old token
+		response = owner.SetClientTokens(getAccessTokens(opt))
+	}
+
+	users, err := getUserRepository(owner.RepositoryName)
+	if err != nil {
+		return nil, err
+	}
+	users.setUser(owner)
+
+	return response, nil
+}
+
+//RequestAuthorizationCode returns authorization code response or error
+func RequestAuthorizationCode(context *UserCtx, authorizationRequest *oauth2.AuthorizationRequest) (response *oauth2.AuthorizationCodeResponse, err error) {
+	rep, err := getUserRepository(context.RepositoryName)
+	if err != nil {
+		return nil, err
+	}
+	user, ok := rep.getUser(context.GetUserID())
+	if !ok {
+		return nil, oauth2.ErrUnauthorizedClient
+	}
+	code := oauth2.NewAuthorizationCode(user.ID, authorizationRequest)
+	err = tokenManager.setAuthorizationCode(code)
+	if err != nil {
+		return nil, err
+	}
+	return code.GetAuthorizationCodeResponse(), nil
 }
 
 func validateClientAllowsCodeRequest(cli *Client, request *oauth2.AuthorizationCodeAccessTokenRequest) (ok bool) {
@@ -127,196 +367,8 @@ func validateClientAllowsRefreshRequest(cli *Client, request *oauth2.RefreshAcce
 	return
 }
 
-func AuthorizationCodeGrantOptions(cliCtx *oauth2.ClientCtx, request *oauth2.AuthorizationCodeAccessTokenRequest) *oauth2.AccessTokenOptions {
-	client, found := GetClient(cliCtx.GetClientID())
-	if !found {
-		log.Error("request not valid", zap.String("client ID", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrInvalidRequestInfo))
-		return nil
-	}
-	//validate that logged in client matches the access token request attributes
-	if !validateClientAllowsCodeRequest(client, request) {
-		log.Error("client did not accept the code request", zap.String("client ID", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrInvalidRequestInfo))
-		return nil
-	}
-	authCode, ok := tokenManager.validateAuthorizationCode(request)
-	if !ok {
-		log.Error("invalid authorization code", zap.String("client ID", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrInvalidRequestInfo))
-		return nil
-	}
-	options := &oauth2.AccessTokenOptions{
-		ClientID:        authCode.ClientID,
-		AddRefreshToken: true,
-		Scope:           authCode.Scope,
-		OwnerID:         authCode.OwnerID,
-	}
-	return options
-}
-
-func DeleteOauth2AccessToken(tokenHint *oauth2.AccessTokenHint) {
-	tokenManager.deleteAccessToken(tokenHint)
-}
-
-func IntrospectOauth2AccessToken(hint *oauth2.AccessTokenHint) (response *oauth2.IntrospectionResponse) {
-	accessToken, ok := tokenManager.validateAccessToken(hint)
-	if !ok {
-		response = &oauth2.IntrospectionResponse{
-			Active: "false",
-		}
-	} else {
-		response = accessToken.GetIntrospectionResponse()
-	}
-	return
-}
-
-func ImplicitGrantOptions(userCtx *UserCtx, request *oauth2.AuthorizationRequest) *oauth2.AccessTokenOptions {
-	client, found := GetClient(uuid.FromStringOrNil(request.ClientID))
-	if !found {
-		log.Error("request not valid", zap.String("client ID", request.ClientID), zap.Error(oauth2.ErrInvalidRequestInfo))
-		return nil
-	}
-	//validate that logged in client matches the access token request attributes
-	if !validateClientAllowsImplicitRequest(client, request) {
-		log.Error("client did not accept the request", zap.String("client ID", request.ClientID), zap.Error(oauth2.ErrInvalidRequestInfo))
-		return nil
-	}
-	validScope := client.ValidateScope(request.Scope)
-	options := &oauth2.AccessTokenOptions{
-		ClientID:        client.ID,
-		AddRefreshToken: false,
-		Scope:           []byte(validScope),
-		OwnerID:         userCtx.UserID,
-		State:           request.State,
-	}
-	return options
-}
-
-func OwnerPasswordGrantOptions(cliCtx *oauth2.ClientCtx, request *oauth2.OwnerPasswordAccessTokenRequest) *oauth2.AccessTokenOptions {
-	client, found := GetClient(cliCtx.GetClientID())
-	if !found {
-		log.Error("request not valid", zap.String("client ID", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrInvalidRequestInfo))
-		return nil
-	}
-	//validate that logged in client matches the access token request attributes
-	if !validateClientAllowsPasswordRequest(client, request) {
-		log.Error("client did not accept the request", zap.String("client ID", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrInvalidRequestInfo))
-		return nil
-	}
-	userCtx, err := ValidateUser(request.Username, request.Password)
-	if err != nil {
-		log.Error("invalid user credentials", zap.String("client ID", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrAccessDeniedInfo))
-		return nil
-	}
-	validScope := client.ValidateScope(request.Scope)
-	options := &oauth2.AccessTokenOptions{
-		ClientID:        client.ID,
-		AddRefreshToken: true,
-		Scope:           []byte(validScope),
-		OwnerID:         userCtx.UserID,
-	}
-	return options
-}
-
-func RefreshTokenGrantOptions(cliCtx *oauth2.ClientCtx, request *oauth2.RefreshAccessTokenRequest) *oauth2.AccessTokenOptions {
-	client, found := GetClient(cliCtx.GetClientID())
-	if !found {
-		log.Error("request not valid", zap.String("client ID", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrInvalidRequestInfo))
-		return nil
-	}
-	//validate that logged in client matches the access token request attributes
-	if !validateClientAllowsRefreshRequest(client, request) {
-		log.Error("client did not accept the request", zap.String("client ID", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrInvalidRequestInfo))
-		return nil
-	}
-	refreshToken, ok := tokenManager.validateAccessToken(request.GetAccessTokenHint())
-	if !ok {
-		log.Error("invalid refresh token", zap.String("client ID", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrAccessDeniedInfo))
-		return nil
-	}
-	validScope := client.ValidateScope(request.Scope)
-	validScope = refreshToken.ValidateScope(validScope)
-
-	options := &oauth2.AccessTokenOptions{
-		ClientID:        refreshToken.GetClient(),
-		AddRefreshToken: true,
-		Scope:           []byte(validScope),
-		OwnerID:         refreshToken.GetResourceOwner(),
-	}
-	return options
-}
-
-func RequestOauth2AccessToken(opt *oauth2.AccessTokenOptions) (response *oauth2.AccessTokenResponse, err error) {
-	//initial validation. Get owner and client
-	if opt == nil {
-		return nil, oauth2.ErrInvalidRequest
-	}
-	client, found := GetClient(opt.ClientID)
-	if !found {
-		return nil, oauth2.ErrUnauthorizedClient
-	}
-	userResource, ok := GetResourceMetadata(opt.OwnerID)
-	if !ok {
-		return nil, oauth2.ErrUnauthorizedClient
-	}
-	users, err := getUserRepository(userResource.RepositoryName)
-	if err != nil {
-		return nil, err
-	}
-	owner, ok := users.getUser(userResource.Name)
-	if !ok {
-		return nil, oauth2.ErrUnauthorizedClient
-	}
-
-	//review if owner previously approved a token for client
-	tokenHint, ok := owner.GetClientAccessToken(client.ID)
-	var token *oauth2.AccessToken
-	if ok {
-		//review if token is valid in the repository
-		token, ok = tokenManager.validateAccessToken(tokenHint)
-		//return if token still exists and valid or remove invalid token from user
-		if ok {
-			return token.GetAccessTokenResponse(), nil
-		} else {
-			owner.DeleteClientTokens(client.ID)
-		}
-	}
-
-	//generate all token from scratch since we couldnt find an old token
-	token = getAccessToken(opt)
-	err = tokenManager.setAccessToken(token)
-	if err != nil {
-		return nil, err
-	}
-	owner.SetClientTokens(token.GetTokenHints())
-	users.setUser(owner)
-	response = token.GetAccessTokenResponse()
-	return response, nil
-}
-
-//RequestOauth2AuthorizationCode returns authorization code response or error
-func RequestOauth2AuthorizationCode(context *UserCtx, authorizationRequest *oauth2.AuthorizationRequest) (response *oauth2.AuthorizationCodeResponse, err error) {
-	rep, err := getUserRepository(context.RepositoryName)
-	if err != nil {
-		return nil, err
-	}
-	//userResource := &ResourceTag{}
-	userResource, ok := GetResourceMetadata(context.GetUserID())
-	if !ok {
-		return nil, oauth2.ErrUnauthorizedClient
-	}
-	user, ok := rep.getUser(userResource.GetName())
-	if !ok {
-		return nil, oauth2.ErrUnauthorizedClient
-	}
-	code := oauth2.NewAuthorizationCode(user.ID, authorizationRequest)
-	err = tokenManager.setAuthorizationCode(code)
-	if err != nil {
-		return nil, err
-	}
-	return code.GetAuthorizationCodeResponse(), nil
-}
-
-//ValidateOauth2AuthorizationRequest verifies that the authorization request is compliant
-func ValidateOauth2AuthorizationRequest(authorizationRequest *oauth2.AuthorizationRequest) error {
+//ValidateAuthorizationRequest verifies that the authorization request is compliant
+func ValidateAuthorizationRequest(authorizationRequest *oauth2.AuthorizationRequest) error {
 	//1.Immediate display errors
 	//Verification of clientID
 	clientID := uuid.FromStringOrNil(authorizationRequest.ClientID)

@@ -12,24 +12,42 @@ import (
 )
 
 func newScim2Router(router *mux.Router) {
-	router.HandleFunc("/clients", middlewareChain(clientsHandler, basicUserAuthSecurity)).Methods(http.MethodGet)
-	router.HandleFunc("/users", middlewareChain(usersHandler, basicUserAuthSecurity)).Methods(http.MethodDelete, http.MethodGet, http.MethodPatch, http.MethodPost, http.MethodPut)
-	router.HandleFunc("/users/{id:[-a-zA-Z0-9]+}", middlewareChain(userGetHandler, basicUserAuthSecurity)).Methods(http.MethodGet)
-	router.HandleFunc("/groups", middlewareChain(groupsHandler, basicUserAuthSecurity)).Methods(http.MethodDelete, http.MethodGet, http.MethodPatch, http.MethodPost, http.MethodPut)
-	router.HandleFunc("/groups/{id:[-a-zA-Z0-9]+}", middlewareChain(groupGetHandler, basicUserAuthSecurity)).Methods(http.MethodGet)
+	router.HandleFunc("/clients", chain(
+		clientsHandler,
+		basicUserAuthSecurity,
+		verifyUserGroups("Admins", "Clients"))).Methods(http.MethodGet, http.MethodPost)
+	router.HandleFunc("/users", chain(
+		usersHandler,
+		basicUserAuthSecurity,
+		verifyUserGroups("Admins"))).Methods(
+		http.MethodDelete,
+		http.MethodGet,
+		http.MethodPatch,
+		http.MethodPost,
+		http.MethodPut)
+	router.HandleFunc("/users/{id:[-a-zA-Z0-9]+}", chain(userGetHandler, basicUserAuthSecurity)).Methods(http.MethodGet)
+	router.HandleFunc("/groups", chain(
+		groupsHandler,
+		basicUserAuthSecurity,
+		verifyUserGroups("Admins"))).Methods(
+		http.MethodDelete,
+		http.MethodGet,
+		http.MethodPatch,
+		http.MethodPost,
+		http.MethodPut)
+	router.HandleFunc("/groups/{id:[-a-zA-Z0-9]+}", chain(groupGetHandler, basicUserAuthSecurity)).Methods(http.MethodGet)
 }
 
 func clientsHandler(w http.ResponseWriter, r *http.Request) {
-	//todo validate if user is admin or filter by group
-	/*
-		ctx := r.Context()
-		usr, ok := fromContextGetUser(ctx)
-		if !ok {
-			log.Error("can not get user from context", zap.Error(scim2.ErrUnauthorized))
-			http.Error(w, repository.ErrInvalidLogin.Error(), http.StatusForbidden)
-			return
-		}
-	*/
+	if r.Method == http.MethodGet {
+		clientsHandlerGet(w, r)
+	}
+	if r.Method == http.MethodPost {
+		clientsHandlerPost(w, r)
+	}
+}
+
+func clientsHandlerGet(w http.ResponseWriter, r *http.Request) {
 	clients := repository.FindClients()
 	schema := []string{"urn:ietf:params:scim:api:messages:2.0:ListResponse"}
 	totalResults := len(clients)
@@ -52,6 +70,46 @@ func clientsHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	//Write json response back to response
 	w.Write(jsonResponse)
+	return
+}
+
+func clientsHandlerPost(w http.ResponseWriter, r *http.Request) {
+	clientReq := &scim2.Client{}
+	err := json.NewDecoder(r.Body).Decode(clientReq)
+	if err != nil {
+		log.Error("can not decode client", zap.String("client id", clientReq.ID), zap.Error(err))
+		http.Error(w, repository.ErrInvalidLogin.Error(), http.StatusForbidden)
+		return
+	}
+	client, err := repository.NewClientFromScim(clientReq)
+	if err != nil {
+		log.Error("can not add user from scim", zap.String("user id", clientReq.ID), zap.Error(err))
+		http.Error(w, repository.ErrInvalidLogin.Error(), http.StatusBadRequest)
+		return
+	}
+	//TODO clean context() after it was used leaving no trace
+	//TODO use better func fromContextGetUser(ctx context.Context) (*repository.User, bool)
+	if loggedUser := r.Context().Value(userCtxKey); loggedUser != nil {
+		//todo add or handle anonymous scope to user and client
+		profile := loggedUser.(*repository.UserCtx)
+		log.Debug("found logged user context", zap.String("user id", profile.GetUserID().String()))
+		client.OwnerID = profile.UserID
+	}
+	//todo if AddClient() err != nil
+	repository.AddClient(client)
+	repository.SetResourceGroups(clientReq, client.GetResourceTag())
+	scim := client.GetScim()
+	//Marshal clientInfResp to json and write to response
+	scimJson, err := json.Marshal(scim)
+	if err != nil {
+		log.Error("can not marshal scim json", zap.String("user id", scim.ID), zap.Error(err))
+		http.Error(w, repository.ErrInvalidLogin.Error(), http.StatusInternalServerError)
+		return
+	}
+	//Set Content-Type header so that clients will know how to read response
+	w.Header().Set("Content-Type", "application/scim+json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(scimJson)
 	return
 }
 
@@ -98,16 +156,6 @@ func usersDeleteHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func usersGetHandler(w http.ResponseWriter, r *http.Request) {
-	//todo validate if user is admin or filter by group
-	/*
-		ctx := r.Context()
-		usr, ok := fromContextGetUser(ctx)
-		if !ok {
-			log.Error("can not get user from context", zap.Error(scim2.ErrUnauthorized))
-			http.Error(w, repository.ErrInvalidLogin.Error(), http.StatusForbidden)
-			return
-		}
-	*/
 	users := repository.FindUsers()
 	schema := []string{"urn:ietf:params:scim:api:messages:2.0:ListResponse"}
 	totalResults := len(users)
@@ -138,7 +186,6 @@ func usersGetHandler(w http.ResponseWriter, r *http.Request) {
 //If the resource exists, the server responds with HTTP status code 200 (OK) and includes the result in the body of the response.
 func userGetHandler(w http.ResponseWriter, r *http.Request) {
 	//get user from context as it has logged in by the middleware
-	//todo validate if user is admin
 	ctx := r.Context()
 	usr, ok := fromContextGetUser(ctx)
 	if !ok {
@@ -146,21 +193,21 @@ func userGetHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, repository.ErrInvalidLogin.Error(), http.StatusForbidden)
 		return
 	}
+	userIsAdmin := repository.ValidateResourceInGroup(usr.GetUserID(), "Admins")
 	vars := mux.Vars(r)
 	id := vars["id"]
-	//todo replace GetResourceTag with get user and user.getScim to match post request
-	resource, err := repository.GetUserScim(uuid.FromStringOrNil(id))
-	if err != nil {
-		log.Error("can not get scim user resource", zap.String("user id", id), zap.Error(scim2.ErrNotFound))
+	if !userIsAdmin && strings.Compare(usr.UserID.String(), strings.TrimSpace(id)) != 0 {
+		log.Debug("user not allowed to request the given resource id", zap.String("user id", usr.UserID.String()), zap.String("resource id", id))
 		http.Error(w, repository.ErrInvalidLogin.Error(), http.StatusForbidden)
 		return
 	}
-	//todo an admin should be able to read the resource
-	if strings.Compare(usr.UserID.String(), resource.ID) != 0 {
-		log.Debug("user id does not match resource id", zap.String("user id", usr.UserID.String()), zap.String("resource id", resource.ID))
-		http.Error(w, repository.ErrInvalidLogin.Error(), http.StatusForbidden)
+	user, found := repository.GetUser(uuid.FromStringOrNil(id))
+	if !found {
+		log.Debug("user not found", zap.String("user id", id))
+		http.Error(w, repository.ErrInvalidRequest.Error(), http.StatusBadRequest)
 		return
 	}
+	resource := user.GetScim()
 	//Marshal clientInfResp to json and write to response
 	resourceJson, err := json.Marshal(resource)
 	if err != nil {
@@ -186,18 +233,18 @@ func usersPostHandler(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(userReq)
 	if err != nil {
 		log.Error("can not decode user", zap.String("user id", userReq.ID), zap.Error(err))
-		http.Error(w, repository.ErrInvalidLogin.Error(), http.StatusForbidden)
+		http.Error(w, repository.ErrInvalidRequest.Error(), http.StatusBadRequest)
 		return
 	}
 	err = repository.AddScimUser(userReq)
 	if err != nil {
 		log.Error("can not add user from scim", zap.String("user id", userReq.ID), zap.Error(err))
-		http.Error(w, repository.ErrInvalidLogin.Error(), http.StatusBadRequest)
+		http.Error(w, repository.ErrInvalidRequest.Error(), http.StatusBadRequest)
 		return
 	}
-	user, err := repository.GetUser(userReq.UserName)
-	if err != nil {
-		log.Error("can not get user", zap.String("user id", userReq.ID), zap.Error(err))
+	user, found := repository.GetUser(userReq.UserName)
+	if !found {
+		log.Error("can not get user", zap.String("user id", userReq.ID), zap.Error(repository.ErrUsernameNotFound))
 		http.Error(w, repository.ErrInvalidLogin.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -234,16 +281,7 @@ func groupsDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-func groupsGetHandler(w http.ResponseWriter, r *http.Request) { //todo validate if user is admin or filter by group
-	/*
-		ctx := r.Context()
-		usr, ok := fromContextGetUser(ctx)
-		if !ok {
-			log.Error("can not get user from context", zap.Error(scim2.ErrUnauthorized))
-			http.Error(w, repository.ErrInvalidLogin.Error(), http.StatusForbidden)
-			return
-		}
-	*/
+func groupsGetHandler(w http.ResponseWriter, r *http.Request) {
 	filter := make(map[string]interface{})
 	groups := repository.FindGroups(filter)
 	schema := []string{"urn:ietf:params:scim:api:messages:2.0:ListResponse"}

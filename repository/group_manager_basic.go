@@ -3,6 +3,7 @@ package repository
 import (
 	"github.com/gofrs/uuid"
 	"go.uber.org/zap"
+	"reflect"
 	"strings"
 )
 
@@ -49,6 +50,16 @@ func (g *GroupManagerBasic) findGroups(conditions map[string]interface{}) ([]Gro
 		if len(nameToFind) > 0 {
 			log.Debug("searching with name condition", zap.String("name", conditions["name"].(string)))
 			if strings.Compare(nameToFind, group.Metadata.Name) != 0 {
+				continue
+			}
+		}
+		memberCondition := conditions["member"]
+		var memberToFind uuid.UUID
+		if memberCondition != nil && reflect.TypeOf(memberToFind) == reflect.TypeOf(uuid.UUID{}) {
+			memberToFind = memberCondition.(uuid.UUID)
+			log.Debug("searching groups with member condition", zap.String("member", conditions["member"].(uuid.UUID).String()))
+			_, ok := group.Members[memberToFind]
+			if !ok {
 				continue
 			}
 		}

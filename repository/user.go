@@ -15,7 +15,6 @@ type User struct {
 	Attributes                         *UserAttributes
 	AuthorizationRequests              map[uuid.UUID]*oauth2.AuthorizationRequest //[oauth_client} auth request
 	AuthorizationRequestsConsentTokens map[uuid.UUID]*ConsentToken
-	Groups                             []string
 	ID                                 uuid.UUID
 	Metadata                           *ResourceTag
 	Password                           string
@@ -53,12 +52,18 @@ type UserCtx struct {
 }
 
 //NewUser creates new user
-func NewUser(id uuid.UUID, username string, password string, repository string) *User {
+func NewUser(username string, password string, repository string) (*User, error) {
 	atm := make(map[uuid.UUID]*oauth2.AccessTokenHint)
 	arm := make(map[uuid.UUID]*oauth2.AuthorizationRequest)
 	arctm := make(map[uuid.UUID]*ConsentToken)
 	rtm := make(map[uuid.UUID]*oauth2.AccessTokenHint)
 	currentTime := time.Now()
+
+	id, err := uuid.NewV4()
+	if err != nil {
+		log.Error("can not get uuid for new user", zap.String("username", username), zap.Error(err))
+		return nil, err
+	}
 
 	metadata := &ResourceTag{
 		Created:        currentTime,
@@ -70,34 +75,7 @@ func NewUser(id uuid.UUID, username string, password string, repository string) 
 	}
 
 	var attributes *UserAttributes
-	/*
-		if scim != nil {
-			attributes = &UserAttributes{
-				Active:            scim.Active,
-				Addresses:         scim.Addresses,
-				DisplayName:       scim.DisplayName,
-				Entitlements:      scim.Entitlements,
-				Emails:            scim.Emails,
-				ExternalId:        scim.ExternalId,
-				Ims:               scim.Ims,
-				Locale:            scim.Locale,
-				Name:              &scim.Name,
-				NickName:          scim.NickName,
-				PhoneNumbers:      scim.PhoneNumbers,
-				Photos:            scim.Photos,
-				PreferredLanguage: scim.PreferredLanguage,
-				ProfileURL:        scim.ProfileURL,
-				Roles:             scim.Roles,
-				Timezone:          scim.Timezone,
-				Title:             scim.Title,
-				UserType:          scim.UserType,
-				X509Certificates:  scim.X509Certificates,
-			}
-		} else {
-
-	*/
 	attributes = &UserAttributes{}
-	//}
 
 	user := &User{
 		AccessTokens:                       atm,
@@ -112,7 +90,7 @@ func NewUser(id uuid.UUID, username string, password string, repository string) 
 		UserName:                           username,
 	}
 
-	return user
+	return user, nil
 }
 
 func (u *User) DeleteClientAccessToken(clientID uuid.UUID) {
@@ -129,9 +107,6 @@ func (u *User) DeleteClientTokens(clientID uuid.UUID) {
 }
 
 func (u *User) GetClientAccessToken(clientID uuid.UUID) (tokenReference *oauth2.AccessTokenHint, ok bool) {
-	if len(clientID) == 0 {
-		return nil, false
-	}
 	if tokenReference, ok := u.AccessTokens[clientID]; ok {
 		return tokenReference, true
 	}
@@ -150,9 +125,9 @@ func (u *User) GetClientRefreshToken(clientID uuid.UUID) (tokenReference *oauth2
 
 func (u *User) GetScim() *scim2.User {
 
-	userGroupFilter := make(map[string]interface{})
-	userGroupFilter["member"] = u.ID
-	groups := FindGroupAssignments(userGroupFilter)
+	memberGroupFilter := make(map[string]interface{})
+	memberGroupFilter["member"] = u.ID
+	groups := FindGroupAssignments(memberGroupFilter)
 
 	user := &scim2.User{
 		Active:            u.Attributes.Active,
@@ -183,32 +158,6 @@ func (u *User) GetScim() *scim2.User {
 	return user
 }
 
-func (u *User) setScim(scim *scim2.User) {
-	if scim != nil {
-		u.Attributes = &UserAttributes{
-			Active:            scim.Active,
-			Addresses:         scim.Addresses,
-			DisplayName:       scim.DisplayName,
-			Entitlements:      scim.Entitlements,
-			Emails:            scim.Emails,
-			ExternalId:        scim.ExternalId,
-			Ims:               scim.Ims,
-			Locale:            scim.Locale,
-			Name:              scim.Name,
-			NickName:          scim.NickName,
-			PhoneNumbers:      scim.PhoneNumbers,
-			Photos:            scim.Photos,
-			PreferredLanguage: scim.PreferredLanguage,
-			ProfileURL:        scim.ProfileURL,
-			Roles:             scim.Roles,
-			Timezone:          scim.Timezone,
-			Title:             scim.Title,
-			UserType:          scim.UserType,
-			X509Certificates:  scim.X509Certificates,
-		}
-	}
-}
-
 func (u *User) GetUserCtx() *UserCtx {
 	return &UserCtx{
 		RepositoryName: u.RepositoryName,
@@ -221,14 +170,15 @@ func (u *User) GetResourceTag() *ResourceTag {
 	return u.Metadata
 }
 
-func (u *User) SetClientTokens(clientID uuid.UUID, accessToken *oauth2.AccessTokenHint, refreshToken *oauth2.AccessTokenHint) {
-	log.Debug("adding token for user and client", zap.String("user ID", u.ID.String()), zap.String("client ID", clientID.String()))
+func (u *User) SetClientTokens(accessToken *oauth2.TokenUnit, refreshToken *oauth2.TokenUnit) *oauth2.AccessTokenResponse {
+	log.Debug("adding token for user and client", zap.String("user ID", u.ID.String()), zap.String("client ID", accessToken.ClientID.String()))
 	if accessToken != nil {
-		u.AccessTokens[clientID] = accessToken
+		u.AccessTokens[accessToken.ClientID] = accessToken.GetTokenHint()
 	}
 	if refreshToken != nil {
-		u.RefreshTokens[clientID] = refreshToken
+		u.RefreshTokens[refreshToken.ClientID] = refreshToken.GetTokenHint()
 	}
+	return oauth2.GetAccessTokenResponse(accessToken, refreshToken)
 }
 
 func (u *User) setClientAuthorizationRequest(token *ConsentToken, request *oauth2.AuthorizationRequest) {
@@ -262,4 +212,30 @@ func (u *UserCtx) GetUserID() uuid.UUID {
 
 func (u *UserCtx) GetRepositoryName() string {
 	return u.RepositoryName
+}
+
+func (u *User) setScim(scim *scim2.User) {
+	if scim != nil {
+		u.Attributes = &UserAttributes{
+			Active:            scim.Active,
+			Addresses:         scim.Addresses,
+			DisplayName:       scim.DisplayName,
+			Entitlements:      scim.Entitlements,
+			Emails:            scim.Emails,
+			ExternalId:        scim.ExternalId,
+			Ims:               scim.Ims,
+			Locale:            scim.Locale,
+			Name:              scim.Name,
+			NickName:          scim.NickName,
+			PhoneNumbers:      scim.PhoneNumbers,
+			Photos:            scim.Photos,
+			PreferredLanguage: scim.PreferredLanguage,
+			ProfileURL:        scim.ProfileURL,
+			Roles:             scim.Roles,
+			Timezone:          scim.Timezone,
+			Title:             scim.Title,
+			UserType:          scim.UserType,
+			X509Certificates:  scim.X509Certificates,
+		}
+	}
 }

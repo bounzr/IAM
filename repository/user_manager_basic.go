@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"github.com/gofrs/uuid"
 	"go.uber.org/zap"
 	"strings"
 )
@@ -9,11 +10,13 @@ import (
 type UserManagerBasic struct {
 	name  string
 	users map[string]*User
+	uids  map[uuid.UUID]string
 }
 
 //init the repository
 func (r *UserManagerBasic) init() {
 	r.users = make(map[string]*User)
+	r.uids = make(map[uuid.UUID]string)
 }
 
 func (r *UserManagerBasic) close() {
@@ -24,6 +27,7 @@ func (r *UserManagerBasic) close() {
 func (r *UserManagerBasic) setUser(user *User) {
 	//add the new user to the repo
 	r.users[user.UserName] = user
+	r.uids[user.ID] = user.UserName
 	return
 }
 
@@ -53,7 +57,8 @@ func (r *UserManagerBasic) validateUser(username string, password string) error 
 	//TODO still not hashing the password in memory.
 }
 
-func (r *UserManagerBasic) deleteUser(username string) {
+func (r *UserManagerBasic) deleteUser(userID interface{}) {
+	username := r.getUsername(userID)
 	delete(r.users, username)
 }
 
@@ -72,8 +77,9 @@ func (r *UserManagerBasic) findUsers() ([]User, error) {
 }
 
 //getUser get user by username
-func (r *UserManagerBasic) getUser(username string) (*User, bool) {
+func (r *UserManagerBasic) getUser(userID interface{}) (*User, bool) {
 	//an user always has an user structure
+	username := r.getUsername(userID)
 	usr, ok := r.users[username]
 	if !ok {
 		if strings.Compare(username, "admin") != 0 {
@@ -82,6 +88,19 @@ func (r *UserManagerBasic) getUser(username string) (*User, bool) {
 		return nil, false
 	}
 	return usr, ok
+}
+
+func (r *UserManagerBasic) getUsername(userID interface{}) string {
+	switch userID.(type) {
+	case string:
+		log.Debug("userID is a string")
+		return userID.(string)
+	case uuid.UUID:
+		return r.uids[userID.(uuid.UUID)]
+	default:
+		return ""
+	}
+
 }
 
 func (r *UserManagerBasic) setRepositoryName(name string) {

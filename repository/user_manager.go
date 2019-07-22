@@ -11,10 +11,10 @@ import (
 //UserManager contains user and profile information
 type UserManager interface {
 	close()
-	deleteUser(username string)
+	deleteUser(userID interface{})
 	findUsers() ([]User, error)
 	getRepositoryName() string
-	getUser(username string) (*User, bool)
+	getUser(userID interface{}) (*User, bool)
 	init()
 	setRepositoryName(name string)
 	setUser(user *User)
@@ -49,8 +49,9 @@ func NewUserManager(name string) UserManager {
 			name: name,
 		}*/
 	repo := &UserManagerLeveldb{
-		cfgPath:  "./rep/user_cfg",
-		userPath: "./rep/user",
+		cfgPath:  "./rep/user/cfg",
+		namePath: "./rep/user/name",
+		uuidPath: "./rep/user/uuid",
 	}
 	repo.init()
 	repo.setRepositoryName(name)
@@ -65,38 +66,37 @@ func AddScimUser(scimUser *scim2.User) error {
 		return err
 	}
 	username := strings.ToLower(scimUser.UserName)
-	id, err := uuid.NewV4()
-	if err != nil {
-		log.Error("can not get uuid", zap.String("username", scimUser.UserName), zap.Error(err))
-		return err
-	}
 	password := scimUser.Password
 	if len(password) == 0 {
 		log.Error("password is empty", zap.String("username", scimUser.UserName), zap.Error(scim2.ErrBadRequestInvalidValue))
 		return scim2.ErrBadRequestInvalidValue
 	}
-	user := NewUser(id, username, password, repository)
+	user, err := NewUser(username, password, repository)
+	if err != nil {
+		log.Error("can not get user", zap.String("username", scimUser.UserName), zap.Error(err))
+		return err
+	}
 	user.setScim(scimUser)
 	users.setUser(user)
-	AddResource(user)
+	SetResourceGroups(scimUser, user.Metadata)
 	return nil
 }
 
 //addUser adds new user to defined repository
-func AddTechnicalUser(repository string, username string, password string) error {
+func AddAdminUser(repository string, username string, password string) error {
 	users, err := getUserRepository(repository)
 	if err != nil {
 		log.Error("can not add technical user", zap.String("username", username), zap.Error(err))
 		return err
 	}
 	username = strings.ToLower(username)
-	id, err := uuid.NewV4()
+	user, err := NewUser(username, password, repository)
 	if err != nil {
 		log.Error("can not get uuid", zap.String("username", username), zap.Error(err))
 		return err
 	}
-	user := NewUser(id, username, password, repository)
 	users.setUser(user)
+	AddGroupResource(privateGroups["Admins"], user.Metadata)
 	return nil
 }
 
@@ -148,17 +148,17 @@ func getUserRepository(repName string) (UserManager, error) {
 }
 
 //getUser searches username in all repositories and return a struct for a matching user
-func GetUser(username string) (*User, error) {
-	if len(username) == 0 {
-		return nil, ErrUsernameNotFound
+func GetUser(userID interface{}) (user *User, found bool) {
+	if userID == nil {
+		return nil, false
 	}
 	for _, store := range userRepositories {
-		user, ok := store.getUser(username)
+		user, ok := store.getUser(userID)
 		if ok {
-			return user, nil
+			return user, true
 		}
 	}
-	return nil, ErrUsernameNotFound
+	return nil, false
 }
 
 //SetAuthorizationRequest saves the client authorization request into the corresponding user
@@ -178,18 +178,18 @@ func SetAuthorizationRequest(user *UserCtx, authorizationRequest *oauth2.Authori
 }
 
 //ValidateUser validates an user in the specified repository
-func ValidateUser(username string, password string) (*UserCtx, error) {
-	user, err := GetUser(username)
-	if err != nil {
-		return nil, err
+func ValidateUser(username string, password string) (userCtx *UserCtx, valid bool) {
+	user, found := GetUser(username)
+	if !found {
+		return nil, false
 	}
 	us, err := getUserRepository(user.RepositoryName)
 	if err != nil {
-		return nil, err
+		return nil, false
 	}
 	err = us.validateUser(user.UserName, password)
 	if err != nil {
-		return nil, err
+		return nil, false
 	}
-	return user.GetUserCtx(), nil
+	return user.GetUserCtx(), true
 }

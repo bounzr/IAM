@@ -8,18 +8,18 @@ import (
 )
 
 type IAManagement struct {
-	Server    Server     `yaml:"server"`
-	Logger    zap.Config `yaml:"logger"`
-	Users     Users      `yaml:"users"`
-	Clients   Clients    `yaml:"clients"`
-	Groups    Groups     `yaml:"groups"`
-	Resources Resources  `yaml:"resources"`
-	Sessions  Sessions   `yaml:"sessions"`
-	Tokens    Tokens     `yaml:"token"`
+	Server   Server     `yaml:"server"`
+	Logger   zap.Config `yaml:"logger"`
+	Users    Users      `yaml:"users"`
+	Clients  Clients    `yaml:"clients"`
+	Groups   Groups     `yaml:"groups"`
+	Sessions Sessions   `yaml:"sessions"`
+	Tokens   Tokens     `yaml:"tokens"`
 }
 
 var (
 	IAM = &IAManagement{}
+	log *zap.Logger
 )
 
 func Init(configFilePath string) {

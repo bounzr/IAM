@@ -53,3 +53,11 @@ type MultiValueAttribute struct {
 	Value   string `json:"value,omitempty"`
 	Primary bool   `json:"primary,omitempty"`
 }
+
+func (u *User) GetGroups() []GroupAssignment {
+	return u.Groups
+}
+
+func (u *User) GetID() string {
+	return u.ID
+}

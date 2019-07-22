@@ -6,7 +6,6 @@ import (
 	"encoding/gob"
 	"github.com/syndtr/goleveldb/leveldb"
 	"go.uber.org/zap"
-	"time"
 )
 
 type TokenManagerLeveldb struct {
@@ -49,7 +48,7 @@ func (r *TokenManagerLeveldb) deleteAccessToken(tokenHint *oauth2.AccessTokenHin
 	}
 }
 
-func (r *TokenManagerLeveldb) setAccessToken(accessToken *oauth2.AccessToken) error {
+func (r *TokenManagerLeveldb) setTokenUnit(accessToken *oauth2.TokenUnit) error {
 	var data bytes.Buffer
 	enc := gob.NewEncoder(&data)
 	err := enc.Encode(accessToken)
@@ -57,7 +56,7 @@ func (r *TokenManagerLeveldb) setAccessToken(accessToken *oauth2.AccessToken) er
 		log.Error("can not encode access token", zap.String("user ID", accessToken.OwnerID.String()), zap.String("client ID", accessToken.ClientID.String()), zap.Error(err))
 		return err
 	}
-	err = r.tokens.Put(accessToken.AccessToken, data.Bytes(), nil)
+	err = r.tokens.Put(accessToken.Token, data.Bytes(), nil)
 	if err != nil {
 		log.Error("can not add token", zap.String("user ID", accessToken.OwnerID.String()), zap.String("client ID", accessToken.ClientID.String()), zap.Error(err))
 		return err
@@ -85,7 +84,7 @@ func (r *TokenManagerLeveldb) setAuthorizationCode(code *oauth2.AuthorizationCod
 	}
 }
 
-func (r *TokenManagerLeveldb) validateAccessToken(tokenHint *oauth2.AccessTokenHint) (token *oauth2.AccessToken, ok bool) {
+func (r *TokenManagerLeveldb) getTokenUnit(tokenHint *oauth2.AccessTokenHint) (token *oauth2.TokenUnit, ok bool) {
 	dataBytes, err := r.tokens.Get([]byte(tokenHint.Token), nil)
 	if err != nil {
 		log.Error("can not find token", zap.Error(err))
@@ -93,18 +92,13 @@ func (r *TokenManagerLeveldb) validateAccessToken(tokenHint *oauth2.AccessTokenH
 	}
 	data := bytes.NewBuffer(dataBytes)
 	dec := gob.NewDecoder(data)
-	var aToken oauth2.AccessToken
+	var aToken oauth2.TokenUnit
 	err = dec.Decode(&aToken)
 	if err != nil {
 		log.Error("can not decode token data", zap.Error(err))
 		return nil, false
 	}
-	ok = aToken.GetExpirationTime() > time.Now().Unix()
-	if !ok{
-		r.deleteAccessToken(tokenHint)
-		return nil, ok
-	}
-	return &aToken, ok
+	return &aToken, true
 }
 
 func (r *TokenManagerLeveldb) validateAuthorizationCode(request *oauth2.AuthorizationCodeAccessTokenRequest) (code *oauth2.AuthorizationCode, ok bool) {
@@ -123,4 +117,3 @@ func (r *TokenManagerLeveldb) validateAuthorizationCode(request *oauth2.Authoriz
 	}
 	return &rCode, true
 }
-

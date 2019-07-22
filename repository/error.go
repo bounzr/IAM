@@ -3,7 +3,6 @@ package repository
 import "errors"
 
 var (
-
 	ErrClientNotFound       = errors.New("clientID not found")
 	ErrGroupNotFound        = errors.New("groupID not found")
 	ErrResourceNotAvailable = errors.New("resource not available")
@@ -11,6 +10,7 @@ var (
 	ErrUsernameNotAvailable = errors.New("username not available")
 	ErrUsernameNotFound     = errors.New("username not found")
 	ErrInvalidLogin         = errors.New("invalid login")
+	ErrInvalidRequest       = errors.New("request is invalid")
 
 	//user repository errors
 	ErrRepositoryNotAvailable = errors.New("repository not available")

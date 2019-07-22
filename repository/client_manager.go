@@ -18,7 +18,7 @@ type ClientManager interface {
 
 func AddClient(cli *Client) {
 	clientManager.setClient(cli)
-	AddResource(cli)
+	AddGroupResource(privateGroups["Clients"], cli.GetResourceTag())
 }
 
 func FindClients() []scim2.Client {
@@ -33,8 +33,11 @@ func FindClients() []scim2.Client {
 	return clients
 }
 
-func GetClient(id uuid.UUID) (client *Client, found bool) {
-	return clientManager.getClient(id)
+func GetClient(id interface{}) (client *Client, found bool) {
+	if id == nil {
+		return nil, false
+	}
+	return clientManager.getClient(id.(uuid.UUID))
 }
 
 func initClients() {

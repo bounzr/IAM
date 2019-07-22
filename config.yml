@@ -28,13 +28,13 @@ users:
     repository: main
 clients:
   implementation: leveldb
+  #time in hours(h), minutes(m), seconds(s) or 0 for infinite
+  secretDuration: 8760h
 groups:
-  implementation: leveldb
-resources:
   implementation: leveldb
 sessions:
   implementation: leveldb
 tokens:
   implementation: leveldb
-  accessDuration: 1h
+  accessDuration: 2m
   refreshDuration: 1h

@@ -2,9 +2,9 @@ package repository
 
 import (
 	"github.com/gofrs/uuid"
-	"testing"
-	"os"
 	"go.uber.org/zap"
+	"os"
+	"testing"
 )
 
 type UserDataProvider struct {
@@ -16,7 +16,7 @@ type UserDataProvider struct {
 
 var (
 	basicUMTest      = &UserManagerBasic{name: "basic"}
-	leveldbUMTest    = &UserManagerLeveldb{cfgPath: "../test/user_cfg", userPath: "../test/user"}
+	leveldbUMTest    = &UserManagerLeveldb{cfgPath: "../test/user_cfg", namePath: "../test/user"}
 	userDataProvider = []UserDataProvider{
 		{basicUMTest, "testusername", "testuserpwd", uuid.FromStringOrNil("2490c31d-3005-47b4-9bc0-45952a2e505e")},
 		{leveldbUMTest, "otherusername", "otheruserpwd", uuid.FromStringOrNil("68d0dffb-3dbf-4086-965f-33dd5d012995")},
