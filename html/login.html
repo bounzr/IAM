@@ -1,35 +1,70 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="utf-8">
+    <meta name="description" content="Bounzr is an OAuth2 compliant identity and access management server. It´s fully customizable and modular">
+    <meta name="author" content="Luis Bustamante">
+    <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <!--<meta name="description" content="">-->
-    <!--<meta name="author" content="">-->
+    <title>Bounzr sign in</title>
     <link rel="icon" href="../static/assets/images/favicon.ico">
-    <title>Bounzr login</title>
-    <!-- Bootstrap core CSS -->
-    <link href="../static/dist/bootstrap/css/bootstrap.css" rel="stylesheet">
+    <!-- Bootstrap css-->
+    <link href="../static/assets/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font-awesome css -->
+    <link href="../static/assets/css/all.min.css" rel="stylesheet">
     <!-- Custom styles for this template -->
-    <link href="../static/assets/css/login.css" rel="stylesheet">
-</head>
+    <link href="../static/assets/css/bounzr.css" rel="stylesheet">
 
-<body class="text-center">
-<form class="form-signin" method="POST">
-    <img class="mb-4" src="../static/assets/images/logo.svg" alt="" width="72" height="72">
-    <h1 class="h3 mb-3 font-weight-normal">Please log in</h1>
-    <label for="inputUsername" class="sr-only">User Id</label>
-    <input name="username" type="username" id="inputUsername" class="form-control" placeholder="Username" required autofocus>
-    <p></p>
-    <label for="inputPassword" class="sr-only">Password</label>
-    <input name="password" type="password" id="inputPassword" class="form-control" placeholder="Password" required>
-    <div class="checkbox mb-3">
-        <label>
-            <input type="checkbox" value="remember-me"> Remember me
-        </label>
-    </div>
-    <button class="btn btn-lg btn-primary btn-block" type="submit">Log in</button>
-    <p class="mt-5 mb-3 text-muted">&copy;2018</p>
-</form>
+</head>
+<body>
+    <!-- background -->
+    <section class="material-half-bg">
+        <div class="cover"></div>
+    </section>
+    <!-- login form -->
+    <section class="login-content">
+        <div class="logo">
+            <h1>BOUNZR</h1>
+        </div>
+        <div class="login-box">
+            <form class="login-form" method="POST">
+                <h3 class="login-head">Sign in to continue</h3>
+                <div class="form-group">
+                    <label class="control-label">USERNAME</label>
+                    <input class="form-control" type="text" name="username" id="inputUsername" placeholder="username" autofocus required>
+                </div>
+                <div class="form-group">
+                    <label class="control-label">PASSWORD</label>
+                    <input class="form-control" type="password" name="password" id="inputPassword" placeholder="password" required>
+                </div>
+                <div class="form-group">
+                    <div class="utility">
+                        <div class="animated-checkbox">
+                            <label>
+                                <input type="checkbox"><span class="label-text">Stay Signed in</span>
+                            </label>
+                        </div>
+                        <p class="semibold-text mb-2"><a href="#" data-toggle="flip">Forgot Password ?</a></p>
+                    </div>
+                </div>
+                <div class="form-group btn-container">
+                    <button class="btn btn-primary btn-block" type="submit"><i class="fas fa-key"></i> SIGN IN</button>
+                </div>
+            </form>
+            <form class="forget-form">
+                <h3 class="login-head"><i class="fas fa-lock"></i>Forgot Password ?</h3>
+                <div class="form-group">
+                    <label class="control-label">EMAIL</label>
+                    <input class="form-control" type="text" placeholder="Email">
+                </div>
+                <div class="form-group btn-container">
+                    <button class="btn btn-primary btn-block"><i class="fa fa-unlock fa-lg fa-fw"></i>RESET</button>
+                </div>
+                <div class="form-group mt-3">
+                    <p class="semibold-text mb-0"><a href="#" data-toggle="flip"><i class="fa fa-angle-left fa-fw"></i> Back to Login</a></p>
+                </div>
+            </form>
+        </div>
+    </section>
 </body>
 </html>

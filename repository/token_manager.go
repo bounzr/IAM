@@ -98,14 +98,27 @@ func IntrospectAccessToken(hint *oauth2.AccessTokenHint) (response *oauth2.Intro
 		return
 	}
 	response = token.GetIntrospectionResponse()
-	owner, ok := GetUser(uuid.FromStringOrNil(response.OwnerID))
-	if ok {
-		response.Username = owner.UserName
-	}
 	client, ok := GetClient(uuid.FromStringOrNil(response.ClientID))
+	//todo audience is the protected resource
 	if ok {
+		log.Debug("client URI found", zap.String("id", response.ClientID), zap.String("URI", client.URI))
 		response.Audience = client.URI
+	} else {
+		log.Debug("client URI not found", zap.String("id", response.ClientID))
 	}
+
+	if response.OwnerID == response.ClientID {
+		response.OwnerName = client.Name
+	} else {
+		owner, ok := GetUser(uuid.FromStringOrNil(response.OwnerID))
+		if ok {
+			log.Debug("owner username found", zap.String("id", response.OwnerID), zap.String("username", owner.UserName))
+			response.OwnerName = owner.UserName
+		} else {
+			log.Debug("owner username not found", zap.String("id", response.OwnerID))
+		}
+	}
+
 	response.Issuer = "https://" + config.IAM.Server.Hostname + ":" + config.IAM.Server.Port
 	response.TokenID = string(token.Token)
 	return
@@ -145,6 +158,27 @@ func ImplicitGrantOptions(userCtx *UserCtx, request *oauth2.AuthorizationRequest
 		Scope:           []byte(validScope),
 		OwnerID:         userCtx.UserID,
 		State:           request.State,
+	}
+	return options
+}
+
+func ClientCredentialsGrantOptions(cliCtx *oauth2.ClientCtx, request *oauth2.ClientCredentialsAccessTokenRequest) *oauth2.AccessTokenOptions {
+	client, found := GetClient(cliCtx.GetClientID())
+	if !found {
+		log.Error("request not valid", zap.String("client ID", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrInvalidRequestInfo))
+		return nil
+	}
+	//validate that logged in client matches the access token request attributes
+	if !validateClientAllowsClientCredentialsRequest(client, request) {
+		log.Error("client did not accept the request", zap.String("client ID", cliCtx.GetClientID().String()), zap.Error(oauth2.ErrInvalidRequestInfo))
+		return nil
+	}
+	validScope := client.ValidateScope(request.Scope)
+	options := &oauth2.AccessTokenOptions{
+		ClientID:        client.ID,
+		AddRefreshToken: false,
+		Scope:           []byte(validScope),
+		OwnerID:         client.ID,
 	}
 	return options
 }
@@ -212,9 +246,17 @@ func RequestAccessToken(opt *oauth2.AccessTokenOptions) (response *oauth2.Access
 	if !found {
 		return nil, oauth2.ErrUnauthorizedClient
 	}
-	owner, ok := GetUser(opt.OwnerID)
-	if !ok {
-		return nil, oauth2.ErrUnauthorizedClient
+	//ownerID can be the client self in client credentials grant
+	var owner AccessTokenHolder
+	if opt.ClientID == opt.OwnerID {
+		log.Debug("ownerID equals clientID")
+		owner = client
+	} else {
+		user, ok := GetUser(opt.OwnerID)
+		if !ok {
+			return nil, oauth2.ErrUnauthorizedClient
+		}
+		owner = user
 	}
 
 	//refresh token always removed and replaced if requested
@@ -260,12 +302,20 @@ func RequestAccessToken(opt *oauth2.AccessTokenOptions) (response *oauth2.Access
 		//generate all token from scratch since we couldnt find an old token
 		response = owner.SetClientTokens(getAccessTokens(opt))
 	}
-
-	users, err := getUserRepository(owner.RepositoryName)
-	if err != nil {
-		return nil, err
+	switch owner.(type) {
+	case *User:
+		user := owner.(*User)
+		users, err := getUserRepository(user.RepositoryName)
+		if err != nil {
+			return nil, err
+		}
+		users.setUser(user)
+	case *Client:
+		client := owner.(*Client)
+		clientManager.setClient(client)
+	default:
+		log.Error("token holder type not identifed", zap.String("resource id", opt.ClientID.String()))
 	}
-	users.setUser(owner)
 
 	return response, nil
 }
@@ -329,6 +379,22 @@ func validateClientAllowsImplicitRequest(cli *Client, request *oauth2.Authorizat
 	}
 	if !cli.HasRedirectURI(request.RedirectURI) {
 		log.Debug("redirect_uri not found for client", zap.String("client ID", cli.ID.String()), zap.String("requested", request.RedirectURI))
+		ok = false
+		return
+	}
+	return
+}
+
+func validateClientAllowsClientCredentialsRequest(cli *Client, request *oauth2.ClientCredentialsAccessTokenRequest) (ok bool) {
+	ok = true
+	if !cli.HasGrantType(request.GrantType) {
+		log.Debug("grant type not found for client", zap.String("client ID", cli.ID.String()), zap.String("requested", request.GetGrantType().String()))
+		ok = false
+		return
+	}
+	token, _ := oauth2.NewResponseType("token")
+	if !cli.HasResponseType(token.String()) {
+		log.Debug("response type not found for client", zap.String("client ID", cli.ID.String()), zap.String("requested", token.String()))
 		ok = false
 		return
 	}

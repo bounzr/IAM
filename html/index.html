@@ -1,75 +1,251 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <meta name="description" content="">
-    <meta name="author" content="">
-    <link rel="icon" href="../../../../favicon.ico">
-
-    <title>Bounzr</title>
-
-    <!-- Bootstrap -->
-    <link rel="stylesheet" href="../static/dist/bootstrap/css/bootstrap.css">
+    <meta name="description" content="Bounzr is an OAuth2 compliant identity and access management server. It´s fully customizable and modular">
+    <meta name="author" content="Luis Bustamante">
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Bounzr Panel</title>
+    <link rel="icon" href="../static/assets/images/favicon.ico">
+    <!-- Bootstrap css-->
+    <link href="../static/assets/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font-awesome css -->
+    <link href="../static/assets/css/all.min.css" rel="stylesheet">
     <!-- Custom styles for this template -->
     <link href="../static/assets/css/bounzr.css" rel="stylesheet">
-
 </head>
-<body>
-    <nav class="navbar navbar-expand-md navbar-dark bg-dark fixed-top">
-        <a class="navbar-brand" href="#">Bounzr</a>
-        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarsExample04" aria-controls="navbarsExample04" aria-expanded="false" aria-label="Toggle navigation">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse justify-content-end" id="navbarright">
-            <ul class="navbar-nav">
-                <li class="nav-item">
-                    <a class="nav-link" href="/bounzr/logout">logout</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link disabled" href="#"><span class="label label-primary">Host {{ .Hostname }}</span></a>
-                </li>
+<body class="app sidebar-mini rtl">
+    <!-- Navbar -->
+    <header class="app-header"><a class="app-header__logo" href="index.html">BOUNZR</a>
+        <!-- Sidebar toggle button -->
+        <a class="app-sidebar__toggle fas fa-align-justify" href="#" data-toggle="sidebar" aria-label="Hide Sidebar"></a>
+        <!-- Navbar Right Menu -->
+        <ul class="app-nav">
+            <!-- User Menu-->
+            <li class="dropdown"><a class="app-nav__item" href="#" data-toggle="dropdown" aria-label="Open Profile Menu"><i class="fas fa-user fa-lg"></i></a>
+                <ul class="dropdown-menu settings-menu dropdown-menu-right">
+                    <li><a class="dropdown-item" href="page-user.html"><i class="fa fa-cog fa-lg"></i> Settings</a></li>
+                    <li><a class="dropdown-item" href="page-user.html"><i class="fa fa-user fa-lg"></i> Profile</a></li>
+                    <li><a class="dropdown-item" href="/bounzr/logout"><i class="fa fa-sign-out fa-lg"></i> Sign out</a></li>
+                </ul>
+            </li>
+        </ul>
+    </header>
+    <!-- Sidebar menu -->
+    <div class="app-sidebar__overlay" data-toggle="sidebar"></div>
+    <aside class="app-sidebar">
+        <div class="app-sidebar__user">
+            <img class="app-sidebar__user-avatar" src="../static/assets/img/mike.jpg" alt="User Image">
+            <div>
+                <p class="app-sidebar__user-name">{{if .Name}}{{.Name.GivenName}} {{.Name.FamilyName}}{{else}}{{.UserName}}{{end}}</p>
+                <p class="app-sidebar__user-designation">{{ .UserName }}</p>
+            </div>
+        </div>
+    </aside>
+    <!-- Upper row -->
+    <!-- Page content -->
+    <main class="app-content">
+        <div class="app-title">
+            <div>
+                <h1><i class="fas fa-edit"></i>User Profile</h1>
+                <p>Modify your user information</p>
+            </div>
+            <ul class="app-breadcrumb breadcrumb">
+                <li class="breadcrumb-item"><i class="fas fa-home fa-lg"></i></li>
+                <li class="breadcrumb-item">User</li>
+                <li class="breadcrumb-item"><a href="#">Profile</a></li>
             </ul>
         </div>
-    </nav>
-    <main role="main">
-        <div class="jumbotron">
-            <div class="container">
-                <h1 class="display-6">Server information:</h1>
-                <ul>
-                    <li><b>authorization endpoint:</b> <code>{{ .AuthorizationEndpoint }}</code></li>
-                    <li><b>token endpoint:</b> <code>{{ .TokenEndpoint }}</code></li>
-                </ul>
+        <!-- Upper row -->
+        <div class="row">
+            <!-- User avatar -->
+            <div class="col-md-4">
+                <div class="tile card card-user">
+                    <div class="image">
+                        <img src="../static/assets/img/damir-bosnjak.jpg" alt="...">
+                    </div>
+                    <div class="card-body">
+                        <div class="author">
+                            <a href="#">
+                                <img class="avatar border-gray" src="../static/assets/img/mike.jpg" alt="...">
+                                {{if .Name}}
+                                <h5 class="title">{{.Name.HonorificPrefix}} {{.Name.GivenName}} {{.Name.MiddleName}} {{.Name.FamilyName}} {{.Name.HonorificSuffix}}</h5>
+                                {{else}}
+                                <h5 class="title">{{.UserName}}</h5>
+                                {{end}}
+                            </a>
+                            <p class="description">
+                                {{.UserName}}
+                            </p>
+                        </div>
+                        <p class="description text-center">
+                            "I like the way you work it
+                            <br> No diggity
+                            <br> I wanna bag it up"
+                        </p>
+                    </div>
+                    <div class="card-footer">
+                        <hr>
+                        <div class="button-container">
+                            <div class="row">
+                                <div class="col-lg-3 col-md-6 col-6 ml-auto">
+                                    <h5>12
+                                        <br>
+                                        <small>Files</small>
+                                    </h5>
+                                </div>
+                                <div class="col-lg-4 col-md-6 col-6 ml-auto mr-auto">
+                                    <h5>2GB
+                                        <br>
+                                        <small>Used</small>
+                                    </h5>
+                                </div>
+                                <div class="col-lg-3 mr-auto">
+                                    <h5>24,6$
+                                        <br>
+                                        <small>Spent</small>
+                                    </h5>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-        </div>
-        <div class="container">
-            <!-- Example row of columns -->
-            <div class="row">
-                <div class="col-md-4">
-                    <h2>Heading</h2>
-                    <p>Donec id elit non mi porta gravida at eget metus. Fusce dapibus, tellus ac cursus commodo, tortor mauris condimentum nibh, ut fermentum massa justo sit amet risus. Etiam porta sem malesuada magna mollis euismod. Donec sed odio dui. </p>
-                    <p><a class="btn btn-secondary" href="#" role="button">View details &raquo;</a></p>
-                </div>
-                <div class="col-md-4">
-                    <h2>Heading</h2>
-                    <p>Donec id elit non mi porta gravida at eget metus. Fusce dapibus, tellus ac cursus commodo, tortor mauris condimentum nibh, ut fermentum massa justo sit amet risus. Etiam porta sem malesuada magna mollis euismod. Donec sed odio dui. </p>
-                    <p><a class="btn btn-secondary" href="#" role="button">View details &raquo;</a></p>
-                </div>
-                <div class="col-md-4">
-                    <h2>Heading</h2>
-                    <p>Donec sed odio dui. Cras justo odio, dapibus ac facilisis in, egestas eget quam. Vestibulum id ligula porta felis euismod semper. Fusce dapibus, tellus ac cursus commodo, tortor mauris condimentum nibh, ut fermentum massa justo sit amet risus.</p>
-                    <p><a class="btn btn-secondary" href="#" role="button">View details &raquo;</a></p>
+            <!-- Edit profile -->
+            <div class="col-md-8">
+                <div class="tile">
+                    <h3 class="tile-title">Edit Profile</h3>
+                    <div class="card-body">
+                        <form>
+                            <div class="row">
+                                <div class="col-md-5 pr-1">
+                                    <div class="form-group">
+                                        <label>Username</label>
+                                        <input type="text" class="form-control" placeholder="Username" value="{{.UserName}}">
+                                    </div>
+                                </div>
+                                <div class="col-md-7 pl-1">
+                                    <div class="form-group">
+                                        <label>Id (display only)</label>
+                                        <input type="text" class="form-control" disabled="" placeholder="Company" value="{{.ID}}">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-1 pr-1">
+                                    <div class="form-group">
+                                        <label>Prefix</label>
+                                        <input type="text" class="form-control" placeholder="" value="{{if .Name}}{{.Name.HonorificPrefix}}{{end}}">
+                                    </div>
+                                </div>
+                                <div class="col-md-4 px-1">
+                                    <div class="form-group">
+                                        <label>First Name</label>
+                                        <input type="text" class="form-control" placeholder="" value="{{if .Name}}{{.Name.GivenName}}{{end}}">
+                                    </div>
+                                </div>
+                                <div class="col-md-2 px-1">
+                                    <div class="form-group">
+                                        <label>Middle Name</label>
+                                        <input type="text" class="form-control" placeholder="" value="{{if .Name}}{{.Name.MiddleName}}{{end}}">
+                                    </div>
+                                </div>
+                                <div class="col-md-4 px-1">
+                                    <div class="form-group">
+                                        <label>Last Name</label>
+                                        <input type="text" class="form-control" placeholder="" value="{{if .Name}}{{.Name.FamilyName}}{{end}}">
+                                    </div>
+                                </div>
+                                <div class="col-md-1 pl-1">
+                                    <div class="form-group">
+                                        <label>Suffix</label>
+                                        <input type="text" class="form-control" placeholder="" value="{{if .Name}}{{.Name.HonorificSuffix}}{{end}}">
+                                    </div>
+                                </div>
+                            </div>
+                            {{range .Emails}}
+                            <div class="row">
+                                <div class="col-md-9 pr-1">
+                                    <div class="form-group">
+                                        <label for="exampleInputEmail1">Email address</label>
+                                        <input type="email" class="form-control" placeholder="" value="{{.Value}}">
+                                    </div>
+                                </div>
+                                <div class="col-md-3 pl-1">
+                                    <div class="form-group">
+                                        <label for="exampleInputEmail1">Type</label>
+                                        <input type="email" class="form-control" placeholder="" value="{{.Type}}">
+                                    </div>
+                                </div>
+                            </div>
+                            {{end}}
+                            <div class="row">
+                                <div class="col-md-9 pr-1">
+                                    <div class="form-group">
+                                        <label for="exampleInputEmail1">Email address</label>
+                                        <input type="email" class="form-control" placeholder="">
+                                    </div>
+                                </div>
+                                <div class="col-md-3 pl-1">
+                                    <div class="form-group">
+                                        <label for="exampleInputEmail1">Type</label>
+                                        <input type="email" class="form-control" placeholder="">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-12">
+                                    <div class="form-group">
+                                        <label>Address</label>
+                                        <input type="text" class="form-control" placeholder="Home Address" value="Melbourne, Australia">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-4 pr-1">
+                                    <div class="form-group">
+                                        <label>City</label>
+                                        <input type="text" class="form-control" placeholder="City" value="Melbourne">
+                                    </div>
+                                </div>
+                                <div class="col-md-4 px-1">
+                                    <div class="form-group">
+                                        <label>Country</label>
+                                        <input type="text" class="form-control" placeholder="Country" value="Australia">
+                                    </div>
+                                </div>
+                                <div class="col-md-4 pl-1">
+                                    <div class="form-group">
+                                        <label>Postal Code</label>
+                                        <input type="number" class="form-control" placeholder="ZIP Code">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-12">
+                                    <div class="form-group">
+                                        <label>About Me</label>
+                                        <textarea class="form-control textarea">Oh so, your weak rhyme You doubt I'll bother, reading into it</textarea>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="update ml-auto mr-auto">
+                                    <button type="submit" class="btn btn-primary btn-round">Update Profile</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             </div>
-
-            <hr>
-
         </div>
     </main>
-
-    <footer class="container">
-        <p>&copy; Bounzr 2018</p>
-    </footer>
-
+    <!-- Optional JavaScript -->
+    <!-- jQuery first, then Popper.js, then Bootstrap JS -->
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
+    <script src="../static/assets/js/bounzr.js" crossorigin="anonymous"></script>
 </body>
 </html>

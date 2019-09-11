@@ -1,12 +1,11 @@
 package router
 
 import (
-	"net/http"
-
 	"../pages"
 	"../repository"
 	"github.com/gorilla/mux"
 	"go.uber.org/zap"
+	"net/http"
 )
 
 //newBounzrRouter returns a new router with Bounzr basic endpoints
@@ -18,9 +17,24 @@ func newBounzrRouter(router *mux.Router) {
 }
 
 func indexPageGetHandler(w http.ResponseWriter, r *http.Request) {
-	err := pages.RenderPage(w, "index.html", nil)
+	ctx := r.Context()
+	usr, ok := fromContextGetUser(ctx)
+	if !ok {
+		//TODO redirect to login instead of error
+		http.Error(w, repository.ErrInvalidLogin.Error(), http.StatusForbidden)
+		log.Debug("can not get user from context", zap.Error(repository.ErrInvalidLogin))
+		return
+	}
+	user, found := repository.GetUser(usr.GetUserID())
+	if !found {
+		log.Debug("user not found", zap.String("user id", usr.GetUserID().String()))
+		http.Error(w, repository.ErrInvalidRequest.Error(), http.StatusBadRequest)
+		return
+	}
+	data := user.GetScim()
+	err := pages.RenderPage(w, "index", data)
 	if err != nil {
-		log.Error("can not render index.html", zap.Error(err))
+		log.Error("can not render index webpage", zap.Error(err))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -44,9 +58,9 @@ func loginPageGetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Error("can not validate login session", zap.Error(err))
-	err = pages.RenderPage(w, "login.html", nil)
+	err = pages.RenderPage(w, "login", nil)
 	if err != nil {
-		log.Error("can not render login.html", zap.Error(err))
+		log.Error("can not render login webpage", zap.Error(err))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -67,7 +81,7 @@ func loginPagePostHandler(w http.ResponseWriter, r *http.Request) {
 	user, valid := authenticateUser(username, password)
 	if !valid {
 		log.Debug("user authentication not valid", zap.String("username", username))
-		pages.RenderPage(w, "login.html", repository.ErrInvalidLogin.Error())
+		pages.RenderPage(w, "login", repository.ErrInvalidLogin.Error())
 		return
 	}
 	sessionToken := repository.NewSessionToken(user)
@@ -97,9 +111,9 @@ func registerPageHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func registerPageGetHandler(w http.ResponseWriter, r *http.Request) {
-	err := pages.RenderPage(w, "register.html", nil)
+	err := pages.RenderPage(w, "signup", nil)
 	if err != nil {
-		log.Error("can not render register.html", zap.Error(err))
+		log.Error("can not render signup template", zap.Error(err))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -113,7 +127,7 @@ func registerPagePostHandler(w http.ResponseWriter, r *http.Request) {
 	err := repository.AddAdminUser("main", username, password)
 	if err != nil {
 		log.Error("can not add technical user", zap.String("username", username), zap.Error(err))
-		pages.RenderPage(w, "register.html", err.Error())
+		pages.RenderPage(w, "signup", err.Error())
 		return
 	}
 	http.Redirect(w, r, "/bounzr/login", 302)

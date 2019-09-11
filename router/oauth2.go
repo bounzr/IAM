@@ -145,9 +145,9 @@ func oauth2AuthorizeGetHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	err = pages.RenderPage(w, "authorize.html", p)
+	err = pages.RenderPage(w, "authorize", p)
 	if err != nil {
-		log.Error("can not render authorize.html", zap.Error(err))
+		log.Error("can not render authorize webpage", zap.Error(err))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 	return
@@ -288,8 +288,6 @@ func oauth2IntrospectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//token := r.FormValue("token")
-	//tokenType := r.FormValue("token_type_hint")
 	hint := &oauth2.AccessTokenHint{}
 	err = decoder.Decode(hint, r.PostForm)
 	if err != nil {
@@ -312,6 +310,8 @@ func oauth2IntrospectHandler(w http.ResponseWriter, r *http.Request) {
 	intJson, err := json.Marshal(introspection)
 	if err != nil {
 		log.Error("can not marshal introspection token", zap.Error(err))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 	//Set Content-Type header so that clients will know how to read response
 	w.Header().Set("Content-Type", "application/json")
@@ -332,12 +332,12 @@ func oauth2RegisterHandlerGet(w http.ResponseWriter, r *http.Request) {
 	id := vars["id"]
 	client, ok := repository.GetClient(uuid.FromStringOrNil(id))
 	if !ok {
-		log.Error("can not get client", zap.String("client id", id))
 		//TODO remove token
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-		//TODO marshal the error request
-		w.Write([]byte("{\"request\":\"not valid\"}"))
+		//w.Header().Set("Content-Type", "application/json")
+		//w.WriteHeader(http.StatusForbidden)
+		//w.Write([]byte("{\"request\":\"not valid\"}"))
+		log.Debug("client not found", zap.String("id", id))
+		http.Error(w, repository.ErrInvalidRequest.Error(), http.StatusBadRequest)
 		return
 	}
 	owner := client.OwnerID
@@ -407,8 +407,8 @@ func oauth2RegisterHandlerPost(w http.ResponseWriter, r *http.Request) {
 		log.Debug("found logged user context", zap.String("user id", profile.GetUserID().String()))
 		client.OwnerID = profile.UserID
 	}
-	repository.AddClient(client)
-	//todo if AddClient() err != nil
+	repository.SetClient(client)
+	//todo if SetClient() err != nil
 	var clientInfResp *oauth2.ClientInformationResponse
 	clientInfResp, err = client.GetClientInformationResponse()
 	if err != nil {
@@ -489,7 +489,7 @@ func oauth2TokenHandlerPost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		options = repository.AuthorizationCodeGrantOptions(cliCtx, &tokenReq)
-		//password grant
+		//clients credentials grant
 	} else if strings.Compare(grant, "client_credentials") == 0 {
 		var tokenReq oauth2.ClientCredentialsAccessTokenRequest
 		err = decoder.Decode(&tokenReq, r.PostForm)
@@ -498,7 +498,8 @@ func oauth2TokenHandlerPost(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, oauth2.ErrInvalidRequest.Error(), http.StatusBadRequest)
 			return
 		}
-		//todo options = repository.ClientCredentialsGrantOptions(cliCtx, &tokenReq)
+		options = repository.ClientCredentialsGrantOptions(cliCtx, &tokenReq)
+		//Owner password grant
 	} else if strings.Compare(grant, "password") == 0 {
 		var tokenReq oauth2.OwnerPasswordAccessTokenRequest
 		err = decoder.Decode(&tokenReq, r.PostForm)
@@ -508,7 +509,7 @@ func oauth2TokenHandlerPost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		options = repository.OwnerPasswordGrantOptions(cliCtx, &tokenReq)
-		//client credentials grant
+		//refresh token grant
 	} else if strings.Compare(grant, "refresh_token") == 0 {
 		var tokenReq oauth2.RefreshAccessTokenRequest
 		err = decoder.Decode(&tokenReq, r.PostForm)

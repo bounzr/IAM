@@ -32,6 +32,16 @@ func (g *GroupManagerBasic) deleteGroupResource(group uuid.UUID, resource uuid.U
 	g.groups[group].DeleteResource(resource)
 }
 
+func (g *GroupManagerBasic) deleteResource(resourceID uuid.UUID) {
+	groups := make([]Group, len(g.groups))
+	idx := 0
+	for _, group := range g.groups {
+		group.DeleteResource(resourceID)
+		groups[idx] = *group
+		idx++
+	}
+}
+
 func (g *GroupManagerBasic) getGroup(group uuid.UUID) (*Group, bool) {
 	grObj, ok := g.groups[group]
 	return grObj, ok

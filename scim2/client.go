@@ -17,7 +17,7 @@ type Client struct {
 	RedirectUris            []string          `json:"redirectUris"`
 	ResponseTypes           []string          `json:"responseTypes,omitempty"`
 	Schemas                 []string          `json:"schemas,omitempty"`
-	Scope                   string            `json:"Scope,omitempty"`
+	Scope                   string            `json:"scope,omitempty"`
 	SoftwareId              string            `json:"softwareId,omitempty"`
 	SoftwareVersion         string            `json:"softwareVersion,omitempty"`
 	TokenEndpointAuthMethod string            `json:"tokenEndpointAuthMethod"`

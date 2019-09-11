@@ -68,7 +68,6 @@ type IntrospectionResponse struct {
 	OwnerName     string `json:"username,omitempty"`
 	TokenAuthType string `json:"token_type,omitempty"`
 	TokenID       string `json:"jti,omitempty"`
-	Username      string `json:"username,omitempty"`
 }
 
 func (ir *IntrospectionResponse) ValidateScope(requestedScope string) (validatedScope string) {

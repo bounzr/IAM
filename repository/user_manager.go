@@ -58,28 +58,28 @@ func NewUserManager(name string) UserManager {
 	return repo
 }
 
-func AddScimUser(scimUser *scim2.User) error {
+func AddScimUser(scimUser *scim2.User) (uuid.UUID, error) {
 	repository := "main" //todo config repository
 	users, err := getUserRepository(repository)
 	if err != nil {
 		log.Error("can not get user", zap.String("username", scimUser.UserName), zap.Error(err))
-		return err
+		return uuid.Nil, err
 	}
 	username := strings.ToLower(scimUser.UserName)
 	password := scimUser.Password
 	if len(password) == 0 {
 		log.Error("password is empty", zap.String("username", scimUser.UserName), zap.Error(scim2.ErrBadRequestInvalidValue))
-		return scim2.ErrBadRequestInvalidValue
+		return uuid.Nil, scim2.ErrBadRequestInvalidValue
 	}
 	user, err := NewUser(username, password, repository)
 	if err != nil {
 		log.Error("can not get user", zap.String("username", scimUser.UserName), zap.Error(err))
-		return err
+		return uuid.Nil, err
 	}
 	user.setScim(scimUser)
 	users.setUser(user)
 	SetResourceGroups(scimUser, user.Metadata)
-	return nil
+	return user.ID, nil
 }
 
 //addUser adds new user to defined repository
@@ -98,6 +98,16 @@ func AddAdminUser(repository string, username string, password string) error {
 	users.setUser(user)
 	AddGroupResource(privateGroups["Admins"], user.Metadata)
 	return nil
+}
+
+func DeleteUser(userID uuid.UUID) {
+	for _, store := range userRepositories {
+		_, ok := store.getUser(userID)
+		if ok {
+			store.deleteUser(userID)
+			return
+		}
+	}
 }
 
 //todo find users(filter, attributes)
@@ -130,7 +140,7 @@ func GetAuthorizationRequest(user *UserCtx, consentToken *ConsentToken) (authori
 	}
 	authorizationRequest, ok = usr.getClientAuthorizationRequest(consentToken)
 	if ok {
-
+		rep.setUser(usr)
 		return authorizationRequest, nil
 	}
 	log.Error("client authorization request not found for client", zap.String("client ID", consentToken.ClientID.String()), zap.Error(ErrSessionNotFound))
@@ -150,6 +160,7 @@ func getUserRepository(repName string) (UserManager, error) {
 //getUser searches username in all repositories and return a struct for a matching user
 func GetUser(userID interface{}) (user *User, found bool) {
 	if userID == nil {
+		log.Warn("provided userID is nil")
 		return nil, false
 	}
 	for _, store := range userRepositories {
@@ -159,6 +170,22 @@ func GetUser(userID interface{}) (user *User, found bool) {
 		}
 	}
 	return nil, false
+}
+
+func ReplaceUserByScim(userID uuid.UUID, scimUser *scim2.User) error {
+	user, found := GetUser(userID)
+	if !found {
+		log.Debug("can not get user", zap.String("username", scimUser.UserName))
+		return ErrUsernameNotFound
+	}
+	user.setScim(scimUser)
+	rep, err := getUserRepository(user.RepositoryName)
+	if err != nil {
+		return err
+	}
+	rep.setUser(user)
+	SetResourceGroups(scimUser, user.Metadata)
+	return nil
 }
 
 //SetAuthorizationRequest saves the client authorization request into the corresponding user

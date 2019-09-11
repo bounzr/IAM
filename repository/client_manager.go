@@ -16,9 +16,8 @@ type ClientManager interface {
 	setClient(cli *Client)
 }
 
-func AddClient(cli *Client) {
-	clientManager.setClient(cli)
-	AddGroupResource(privateGroups["Clients"], cli.GetResourceTag())
+func DeleteClient(clientID uuid.UUID) {
+	clientManager.deleteClient(clientID)
 }
 
 func FindClients() []scim2.Client {
@@ -49,4 +48,20 @@ func initClients() {
 		clientManager = &ClientManagerBasic{}
 	}
 	clientManager.init()
+}
+
+func ReplaceClientByScim(clientID uuid.UUID, scim *scim2.Client) error {
+	client, found := GetClient(clientID)
+	if !found {
+		log.Debug("client not found", zap.String("id", clientID.String()))
+		return ErrInvalidRequest
+	}
+	client.SetScim(scim)
+	SetClient(client)
+	return nil
+}
+
+func SetClient(cli *Client) {
+	clientManager.setClient(cli)
+	AddGroupResource(privateGroups["Clients"], cli.GetResourceTag())
 }

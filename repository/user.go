@@ -124,7 +124,6 @@ func (u *User) GetClientRefreshToken(clientID uuid.UUID) (tokenReference *oauth2
 }
 
 func (u *User) GetScim() *scim2.User {
-
 	memberGroupFilter := make(map[string]interface{})
 	memberGroupFilter["member"] = u.ID
 	groups := FindGroupAssignments(memberGroupFilter)
@@ -195,7 +194,7 @@ func (u *User) getClientAuthorizationRequest(consentToken *ConsentToken) (autReq
 	delete(u.AuthorizationRequestsConsentTokens, consentToken.ClientID)
 	delete(u.AuthorizationRequests, consentToken.ClientID)
 	if tokenOK && reqOK {
-		if strings.Compare(consentToken.Token, originalToken.Token) == 0 {
+		if strings.Compare(consentToken.Token, originalToken.Token) == 0 && len(originalToken.Token) > 0 {
 			return authReq, true
 		} else {
 			log.Debug("consent token not matching")

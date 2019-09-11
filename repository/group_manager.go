@@ -12,6 +12,7 @@ type GroupManager interface {
 	close()
 	deleteGroup(groupID uuid.UUID)
 	deleteGroupResource(groupID uuid.UUID, resource uuid.UUID)
+	deleteResource(resource uuid.UUID)
 	findGroups(filter map[string]interface{}) ([]Group, error)
 	getGroup(groupID uuid.UUID) (*Group, bool)
 	init()
@@ -124,6 +125,7 @@ func GetGroup(group uuid.UUID) (*Group, error) {
 }
 
 func SetResourceGroups(assigner scim2.GroupAssigner, resource ResourceTagger) {
+	groupManager.deleteResource(resource.GetUUID())
 	groupAssignment := assigner.GetGroups()
 	for _, group := range groupAssignment {
 		groupID, err := uuid.FromString(group.Value)

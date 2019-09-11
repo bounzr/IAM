@@ -63,7 +63,7 @@ var basicUserAuthSecurity = func(f http.HandlerFunc) http.HandlerFunc {
 		}
 		user, valid := authenticateUser(username, password)
 		if !valid {
-			log.Error("invalid user authentication attempt", zap.String("user", username))
+			log.Debug("invalid user authentication attempt", zap.String("user", username))
 			http.Error(w, repository.ErrInvalidLogin.Error(), http.StatusUnauthorized)
 			return
 		}

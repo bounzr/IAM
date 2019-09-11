@@ -295,7 +295,6 @@ func (t *TokenUnit) GetIntrospectionResponse() (response *IntrospectionResponse)
 		Scope:         t.GetScope(),
 		OwnerID:       t.GetResourceOwner().String(),
 		TokenAuthType: t.GetTokenAuthType(),
-		Username:      t.GetResourceOwner().String(),
 	}
 	return
 }
@@ -328,26 +327,6 @@ func (t *TokenUnit) GetToken() (token []byte) {
 func (t *TokenUnit) GetTokenAuthType() (tokenType string) {
 	return t.TokenAuthType.String()
 }
-
-/*
-func (t *TokenUnit) GetTokenHints() (clientID uuid.UUID, accessToken *AccessTokenHint, refreshToken *AccessTokenHint) {
-	clientID = t.ClientID
-	if len(t.Token) > 0 {
-		accessToken = &AccessTokenHint{
-			Token: string(t.Token),
-			Hint:  AccessTokenHintType.String(),
-		}
-	}
-	if len(t.RefreshToken) > 0 {
-		refreshToken = &AccessTokenHint{
-			Token: string(t.RefreshToken),
-			Hint:  RefreshTokenHintType.String(),
-		}
-	}
-	return
-}
-
-*/
 
 func (t *TokenUnit) GetTokenHint() *AccessTokenHint {
 	hint := &AccessTokenHint{

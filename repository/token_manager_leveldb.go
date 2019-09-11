@@ -85,6 +85,10 @@ func (r *TokenManagerLeveldb) setAuthorizationCode(code *oauth2.AuthorizationCod
 }
 
 func (r *TokenManagerLeveldb) getTokenUnit(tokenHint *oauth2.AccessTokenHint) (token *oauth2.TokenUnit, ok bool) {
+	if tokenHint == nil {
+		log.Error("token hint is nil")
+		return nil, false
+	}
 	dataBytes, err := r.tokens.Get([]byte(tokenHint.Token), nil)
 	if err != nil {
 		log.Error("can not find token", zap.Error(err))
@@ -104,7 +108,7 @@ func (r *TokenManagerLeveldb) getTokenUnit(tokenHint *oauth2.AccessTokenHint) (t
 func (r *TokenManagerLeveldb) validateAuthorizationCode(request *oauth2.AuthorizationCodeAccessTokenRequest) (code *oauth2.AuthorizationCode, ok bool) {
 	dataBytes, err := r.codes.Get([]byte(request.Code), nil)
 	if err != nil {
-		log.Error("can not find code", zap.String("client ID", code.ClientID.String()), zap.Error(err))
+		log.Error("can not find code", zap.String("client ID", request.ClientID), zap.Error(err))
 		return nil, false
 	}
 	data := bytes.NewBuffer(dataBytes)
@@ -112,8 +116,13 @@ func (r *TokenManagerLeveldb) validateAuthorizationCode(request *oauth2.Authoriz
 	var rCode oauth2.AuthorizationCode
 	err = dec.Decode(&rCode)
 	if err != nil {
-		log.Error("can not decode code data", zap.String("client ID", code.ClientID.String()), zap.Error(err))
+		log.Error("can not decode code data", zap.String("client ID", request.ClientID), zap.Error(err))
 		return nil, false
+	}
+	//remove code code after use
+	err = r.codes.Delete([]byte(request.Code), nil)
+	if err != nil {
+		log.Error("can not removed consumed code", zap.Error(err))
 	}
 	return &rCode, true
 }

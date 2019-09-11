@@ -102,7 +102,7 @@ func (r *UserManagerLeveldb) getUser(userID interface{}) (*User, bool) {
 	}
 	dataBytes, err := r.nameDB.Get([]byte(username), nil)
 	if err != nil {
-		log.Error("can not get user", zap.String("username", username), zap.Error(err))
+		log.Debug("can not get user", zap.String("username", username), zap.Error(err))
 		return nil, false
 	}
 	data := bytes.NewBuffer(dataBytes)

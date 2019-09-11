@@ -19,6 +19,47 @@ func (gr *GroupManagerLeveldb) close() {
 	defer gr.groups.Close()
 }
 
+func (gr *GroupManagerLeveldb) deleteGroup(groupID uuid.UUID) {
+	err := gr.groups.Delete(groupID.Bytes(), nil)
+	if err != nil {
+		log.Error("can not delete group", zap.String("group ID", groupID.String()), zap.Error(err))
+	} else {
+		log.Debug("deleted group", zap.String("group ID", groupID.String()))
+	}
+}
+
+func (gr *GroupManagerLeveldb) deleteGroupResource(groupID uuid.UUID, resourceID uuid.UUID) {
+	res, ok := gr.getGroup(groupID)
+	if ok {
+		delete(res.Members, resourceID)
+		gr.setGroup(res)
+		log.Debug("resource deleted from group", zap.String("group ID", groupID.String()), zap.String("resource ID", resourceID.String()))
+	} else {
+		log.Error("group not found", zap.String("group ID", groupID.String()), zap.Error(ErrGroupNotFound))
+	}
+}
+
+func (gr *GroupManagerLeveldb) deleteResource(resourceID uuid.UUID) {
+	iter := gr.groups.NewIterator(nil, nil)
+	for iter.Next() {
+		dataBytes := iter.Value()
+		data := bytes.NewBuffer(dataBytes)
+		dec := gob.NewDecoder(data)
+		var group Group
+		err := dec.Decode(&group)
+		if err != nil {
+			log.Error("can not decode group", zap.Error(err))
+		}
+		log.Debug("group decoded", zap.String("id", group.Metadata.ID.String()))
+		delete(group.Members, resourceID)
+		gr.setGroup(&group)
+	}
+	iter.Release()
+	if err := iter.Error(); err != nil {
+		log.Error("could not release group iterator", zap.Error(err))
+	}
+}
+
 func (gr *GroupManagerLeveldb) findGroups(conditions map[string]interface{}) ([]Group, error) {
 	var groups []Group
 	iter := gr.groups.NewIterator(nil, nil)
@@ -84,26 +125,6 @@ func (gr *GroupManagerLeveldb) setGroupResource(groupID uuid.UUID, resource Reso
 		log.Error("group not found", zap.String("group ID", groupID.String()), zap.Error(ErrGroupNotFound))
 	}
 	return
-}
-
-func (gr *GroupManagerLeveldb) deleteGroup(groupID uuid.UUID) {
-	err := gr.groups.Delete(groupID.Bytes(), nil)
-	if err != nil {
-		log.Error("can not delete group", zap.String("group ID", groupID.String()), zap.Error(err))
-	} else {
-		log.Debug("deleted group", zap.String("group ID", groupID.String()))
-	}
-}
-
-func (gr *GroupManagerLeveldb) deleteGroupResource(groupID uuid.UUID, resourceID uuid.UUID) {
-	res, ok := gr.getGroup(groupID)
-	if ok {
-		delete(res.Members, resourceID)
-		gr.setGroup(res)
-		log.Debug("resource deleted from group", zap.String("group ID", groupID.String()), zap.String("resource ID", resourceID.String()))
-	} else {
-		log.Error("group not found", zap.String("group ID", groupID.String()), zap.Error(ErrGroupNotFound))
-	}
 }
 
 func (gr *GroupManagerLeveldb) getGroup(groupID uuid.UUID) (*Group, bool) {

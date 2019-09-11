@@ -6,11 +6,13 @@ import (
 	"../scim2"
 	"../utils"
 	"github.com/gofrs/uuid"
+	"go.uber.org/zap"
 	"strings"
 	"time"
 )
 
 type Client struct {
+	AccessToken             *oauth2.AccessTokenHint
 	Contacts                []string
 	Created                 time.Time
 	GrantTypes              map[string]struct{}
@@ -32,6 +34,48 @@ type Client struct {
 	TokenEndpointAuthMethod string
 	TosURI                  string
 	URI                     string
+}
+
+func (c *Client) DeleteClientAccessToken(clientID uuid.UUID) {
+	if clientID == c.ID {
+		c.AccessToken = nil
+	} else {
+		log.Warn("tried to modify access token for wrong client", zap.String("current client", c.ID.String()), zap.String("token client", clientID.String()))
+	}
+}
+
+func (c *Client) DeleteClientRefreshToken(clientID uuid.UUID) {
+	if clientID != c.ID {
+		log.Warn("tried to modify access token for wrong client", zap.String("current client", c.ID.String()), zap.String("token client", clientID.String()))
+	}
+}
+
+func (c *Client) DeleteClientTokens(clientID uuid.UUID) {
+	if clientID == c.ID {
+		c.AccessToken = nil
+	} else {
+		log.Warn("tried to modify access token for wrong client", zap.String("current client", c.ID.String()), zap.String("token client", clientID.String()))
+	}
+}
+
+func (c *Client) GetClientAccessToken(clientID uuid.UUID) (tokenReference *oauth2.AccessTokenHint, ok bool) {
+	if clientID == c.ID {
+		if c.AccessToken != nil {
+			return c.AccessToken, true
+		}
+	} else {
+		log.Warn("tried to modify access token for wrong client", zap.String("current client", c.ID.String()), zap.String("token client", clientID.String()))
+	}
+	return nil, false
+}
+
+func (c *Client) GetClientRefreshToken(clientID uuid.UUID) (tokenReference *oauth2.AccessTokenHint, ok bool) {
+	return nil, false
+}
+
+func (c *Client) SetClientTokens(accessToken *oauth2.TokenUnit, refreshToken *oauth2.TokenUnit) *oauth2.AccessTokenResponse {
+	c.AccessToken = accessToken.GetTokenHint()
+	return oauth2.GetAccessTokenResponse(accessToken, refreshToken)
 }
 
 func (c *Client) GetResourceTag() *ResourceTag {
@@ -189,6 +233,27 @@ func (c *Client) HasResponseType(responseType string) (ok bool) {
 func (c *Client) HasRedirectURI(redirectURI string) (ok bool) {
 	_, ok = c.RedirectURIs[redirectURI]
 	return
+}
+
+func (c *Client) SetScim(scim *scim2.Client) {
+	c.Name = scim.Name
+	c.SecretExpiresAt = time.Unix(scim.PasswordExpiresAt, 0)
+	c.URI = scim.URI
+	c.Contacts = scim.Contacts
+	c.GrantTypes = getSliceToMap(scim.GrantTypes)
+	c.ID = uuid.FromStringOrNil(scim.ID)
+	c.JwksURI = scim.JwksURI
+	c.Jwks = scim.Jwks
+	c.LastModified = time.Now()
+	c.LogoURI = scim.LogoUri
+	c.PolicyURI = scim.PolicyUri
+	c.RedirectURIs = getSliceToMap(scim.RedirectUris)
+	c.ResponseTypes = getSliceToMap(scim.ResponseTypes)
+	c.Scope = scim.Scope
+	c.SoftwareID = scim.SoftwareId
+	c.SoftwareVersion = scim.SoftwareVersion
+	c.TokenEndpointAuthMethod = scim.TokenEndpointAuthMethod
+	c.TosURI = scim.TosUri
 }
 
 func NewClientFromOauth(request *oauth2.ClientRegistrationRequest) (*Client, error) {

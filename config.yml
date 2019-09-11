@@ -3,6 +3,11 @@ server:
   port: 8443
   certificate: ./cert.pem
   privateKey: ./key.pem
+webpages:
+  authorize: ./html/authorize.html
+  index: ./html/index.html
+  login: ./html/login.html
+  signup: ./html/signup.html
 logger:
   level:  debug
   #json or console
