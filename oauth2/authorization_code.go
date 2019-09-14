@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"../utils"
+	"bounzr/iam/utils"
 )
 
 /*

@@ -1,7 +1,7 @@
 package repository
 
 import (
-	"../utils"
+	"bounzr/iam/utils"
 	"github.com/gofrs/uuid"
 )
 

@@ -1,8 +1,8 @@
 package oauth2
 
 import (
-	"../token"
-	"../utils"
+	"bounzr/iam/token"
+	"bounzr/iam/utils"
 	"github.com/gofrs/uuid"
 	"time"
 )

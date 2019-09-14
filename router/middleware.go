@@ -5,7 +5,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"../repository"
+	"bounzr/iam/repository"
 )
 
 // middleware - a type that describes a middleware, at the core of this implementation a middleware is merely a function

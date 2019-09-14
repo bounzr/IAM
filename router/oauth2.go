@@ -1,15 +1,15 @@
 package router
 
 import (
-	"../pages"
+	"bounzr/iam/pages"
 	"encoding/json"
 	"fmt"
 	"github.com/gofrs/uuid"
 	"net/http"
 	"strings"
 
-	"../oauth2"
-	"../repository"
+	"bounzr/iam/oauth2"
+	"bounzr/iam/repository"
 
 	"github.com/gorilla/mux"
 	"go.uber.org/zap"

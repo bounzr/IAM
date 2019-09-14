@@ -1,8 +1,8 @@
 package repository
 
 import (
-	"../config"
-	"../utils"
+	"bounzr/iam/config"
+	"bounzr/iam/utils"
 )
 
 type SessionToken [32]byte

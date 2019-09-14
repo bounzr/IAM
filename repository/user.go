@@ -1,8 +1,8 @@
 package repository
 
 import (
-	"../oauth2"
-	"../scim2"
+	"bounzr/iam/oauth2"
+	"bounzr/iam/scim2"
 	"github.com/gofrs/uuid"
 	"go.uber.org/zap"
 	"strings"

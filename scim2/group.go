@@ -1,7 +1,7 @@
 package scim2
 
 import (
-	"../config"
+	"bounzr/iam/config"
 	"fmt"
 )
 

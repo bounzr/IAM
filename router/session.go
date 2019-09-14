@@ -4,8 +4,8 @@ import (
 	"github.com/gofrs/uuid"
 	"net/http"
 
-	"../oauth2"
-	"../repository"
+	"bounzr/iam/oauth2"
+	"bounzr/iam/repository"
 	"go.uber.org/zap"
 )
 

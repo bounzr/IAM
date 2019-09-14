@@ -1,7 +1,7 @@
 package logger
 
 import (
-	"../config"
+	"bounzr/iam/config"
 	"go.uber.org/zap"
 )
 

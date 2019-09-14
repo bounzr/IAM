@@ -3,8 +3,8 @@ package router
 import (
 	"context"
 
-	"../oauth2"
-	"../repository"
+	"bounzr/iam/oauth2"
+	"bounzr/iam/repository"
 )
 
 // key is an unexported type for keys defined in this package.

@@ -1,8 +1,8 @@
 package repository
 
 import (
-	"../config"
-	"../scim2"
+	"bounzr/iam/config"
+	"bounzr/iam/scim2"
 	"github.com/gofrs/uuid"
 	"go.uber.org/zap"
 )

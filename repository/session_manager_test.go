@@ -1,11 +1,11 @@
 package repository
 
 import (
-	"../utils"
+	"bounzr/iam/utils"
 	"github.com/gofrs/uuid"
-	"testing"
-	"os"
 	"go.uber.org/zap"
+	"os"
+	"testing"
 )
 
 type SessionDataProvider struct {
@@ -19,7 +19,7 @@ type SessionDataProvider struct {
 
 var (
 	basicSMTest         = &SessionManagerBasic{}
-	leveldbSMTest       = &SessionManagerLeveldb{sessionsPath:"../test/session" }
+	leveldbSMTest       = &SessionManagerLeveldb{sessionsPath: "../test/session"}
 	sessionDataProvider = []SessionDataProvider{
 		{basicSMTest, "basic", "testusername", "testuserpwd", uuid.FromStringOrNil("2490c31d-3005-47b4-9bc0-45952a2e505e"), utils.GetRandom32Token()},
 		{leveldbSMTest, "leveldb", "otherusername", "otheruserpwd", uuid.FromStringOrNil("68d0dffb-3dbf-4086-965f-33dd5d012995"), utils.GetRandom32Token()},
@@ -58,12 +58,12 @@ func TestGetSession(t *testing.T) {
 			t.Errorf("session not deleted - %s", err.Error())
 		}
 		/*
-		ctx, err = provider.Manager.getSessionContext(provider.token)
-		if err == nil {
-			t.Errorf("session not deleted test failed in repository %s", provider.repository)
-		} else {
-			log.Info("the test returned a session error as expected", zap.Error(err))
-		}
+			ctx, err = provider.Manager.getSessionContext(provider.token)
+			if err == nil {
+				t.Errorf("session not deleted test failed in repository %s", provider.repository)
+			} else {
+				log.Info("the test returned a session error as expected", zap.Error(err))
+			}
 		*/
 	}
 	executeSessionTest(test)

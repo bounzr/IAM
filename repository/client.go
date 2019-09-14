@@ -1,10 +1,10 @@
 package repository
 
 import (
-	"../config"
-	"../oauth2"
-	"../scim2"
-	"../utils"
+	"bounzr/iam/config"
+	"bounzr/iam/oauth2"
+	"bounzr/iam/scim2"
+	"bounzr/iam/utils"
 	"github.com/gofrs/uuid"
 	"go.uber.org/zap"
 	"strings"

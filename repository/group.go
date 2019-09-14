@@ -1,7 +1,7 @@
 package repository
 
 import (
-	"../scim2"
+	"bounzr/iam/scim2"
 	"github.com/gofrs/uuid"
 	"time"
 )

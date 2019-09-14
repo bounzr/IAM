@@ -1,8 +1,8 @@
 package router
 
 import (
-	"../pages"
-	"../repository"
+	"bounzr/iam/pages"
+	"bounzr/iam/repository"
 	"github.com/gorilla/mux"
 	"go.uber.org/zap"
 	"net/http"

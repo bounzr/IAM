@@ -1,13 +1,13 @@
 package main
 
 import (
-	"./config"
-	"./logger"
-	"./pages"
-	"./repository"
-	packageRouter "./router"
-	"./token"
-	"./utils"
+	"bounzr/iam/config"
+	"bounzr/iam/logger"
+	"bounzr/iam/pages"
+	"bounzr/iam/repository"
+	packageRouter "bounzr/iam/router"
+	"bounzr/iam/token"
+	"bounzr/iam/utils"
 	"github.com/gorilla/mux"
 	"github.com/urfave/cli"
 	"go.uber.org/zap"

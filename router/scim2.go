@@ -1,8 +1,8 @@
 package router
 
 import (
-	"../repository"
-	"../scim2"
+	"bounzr/iam/repository"
+	"bounzr/iam/scim2"
 	"encoding/json"
 	"github.com/gofrs/uuid"
 	"github.com/gorilla/mux"

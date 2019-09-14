@@ -1,8 +1,8 @@
 package repository
 
 import (
-	"../config"
-	"../logger"
+	"bounzr/iam/config"
+	"bounzr/iam/logger"
 	"encoding/gob"
 	"go.uber.org/zap"
 )

@@ -1,9 +1,9 @@
 package repository
 
 import (
-	"../config"
-	"../oauth2"
-	"../utils"
+	"bounzr/iam/config"
+	"bounzr/iam/oauth2"
+	"bounzr/iam/utils"
 	"bytes"
 	"github.com/gofrs/uuid"
 	"strings"

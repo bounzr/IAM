@@ -1,8 +1,8 @@
 package pages
 
 import (
-	"../config"
-	"../logger"
+	"bounzr/iam/config"
+	"bounzr/iam/logger"
 	"errors"
 	"fmt"
 	"go.uber.org/zap"

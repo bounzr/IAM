@@ -1,7 +1,7 @@
 package router
 
 import (
-	"../logger"
+	"bounzr/iam/logger"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/schema"
 	"github.com/gorilla/securecookie"

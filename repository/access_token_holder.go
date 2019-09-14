@@ -1,7 +1,7 @@
 package repository
 
 import (
-	"../oauth2"
+	"bounzr/iam/oauth2"
 	"github.com/gofrs/uuid"
 )
 

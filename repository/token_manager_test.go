@@ -1,8 +1,8 @@
 package repository
 
 import (
-	"../oauth2"
-	"../token"
+	"bounzr/iam/oauth2"
+	"bounzr/iam/token"
 	"bytes"
 	"github.com/gofrs/uuid"
 	"go.uber.org/zap"
